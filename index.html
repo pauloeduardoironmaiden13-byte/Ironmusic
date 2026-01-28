@@ -100,6 +100,9 @@
 
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
         
+        // SEU SERVIDOR NOVO:
+        const BACKEND_URL = "https://ironmusic-api.onrender.com"; 
+
         // Inicialização Firebase Segura e Seletiva
         let db = null;
         let auth = null;
@@ -347,7 +350,6 @@
                 if (!currentTrack) return '';
                 const term = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist} lyrics`);
                 const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
-                // enablejsapi=1 é crucial
                 return `https://www.youtube.com/embed?listType=search&list=${term}&autoplay=1&playsinline=1&rel=0&enablejsapi=1${origin}`;
             };
 
@@ -583,7 +585,7 @@
                                         <img src={currentTrack.artwork} className="w-10 h-10 rounded" />
                                         <div>
                                             <p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p>
-                                            <p className="text-xs text-gray-500">{currentTrack.artist}</p>
+                                            <p className="text-xs text-gray-400 truncate">{currentTrack.artist}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 items-center">
