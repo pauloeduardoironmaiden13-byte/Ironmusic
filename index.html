@@ -233,40 +233,43 @@
                 };
             }, []);
 
-            // --- FUNÇÃO PARA PEGAR URL DO SERVER ---
+            // --- FUNÇÃO DE BUSCA ULTRA ROBUSTA (Múltiplas Fontes) ---
             const getAudioLink = async (title, artist) => {
                 const search = encodeURIComponent(`${title} ${artist} lyrics`);
-                // Lista ROTATIVA de APIs públicas para garantir que ache o vídeo
+                
+                // Lista de APIs Piped/Invidious (Instâncias públicas estáveis)
                 const apis = [
+                    `https://api.piped.ot.ax/search?q=${search}&filter=music_songs`,
                     `https://pipedapi.kavin.rocks/search?q=${search}&filter=music_songs`,
-                    `https://invidious.privacydev.net/api/v1/search?q=${search}&type=video`,
-                    `https://vid.uff.email/api/v1/search?q=${search}&type=video`,
-                    `https://invidious.protokolla.fi/api/v1/search?q=${search}&type=video`,
-                    `https://ytapi.srv.us.kg/search?q=${search}`
+                    `https://pipedapi.drgns.space/search?q=${search}&filter=music_songs`,
+                    `https://pa.il.ax/search?q=${search}&filter=music_songs`
                 ];
 
                 for (const api of apis) {
                     try {
-                        const res = await fetch(api);
+                        // Timeout de 2 segundos para não travar
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 2000);
+                        
+                        const res = await fetch(api, { signal: controller.signal });
+                        clearTimeout(timeoutId);
+
                         if (!res.ok) continue;
                         const data = await res.json();
-                        let videoId = null;
                         
-                        // Tenta extrair ID de diferentes formatos de API
-                        if (api.includes('piped') && data.items && data.items.length > 0) {
-                            videoId = data.items[0].url.split('v=')[1];
-                        } else if (data && data.length > 0 && data[0].videoId) {
-                            videoId = data[0].videoId;
-                        } else if (data && data.items && data.items.length > 0 && data.items[0].id) {
-                             videoId = data.items[0].id.videoId || data.items[0].id;
-                        }
-
-                        if (videoId) {
-                            console.log("Encontrado ID:", videoId, "na API:", api);
-                            return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
+                        // Lógica Piped: array de items
+                        if (data.items && data.items.length > 0) {
+                            // Pega o primeiro item que parece um vídeo
+                            const videoUrl = data.items[0].url; 
+                            const videoId = videoUrl.split('v=')[1];
+                            
+                            if (videoId) {
+                                console.log("ID encontrado via:", api);
+                                return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
+                            }
                         }
                     } catch (e) {
-                        continue; 
+                        continue; // Tenta o próximo silenciosamente
                     }
                 }
                 return null;
@@ -278,18 +281,35 @@
 
                 const loadAndPlay = async () => {
                     let src = "";
-                    setAudioLoading(true); 
                     
                     if (currentTrack.isLocal) {
                         src = currentTrack.previewUrl;
                         setAudioLoading(false);
                     } else if (sourceMode === 'full' && BACKEND_URL) {
-                        const serverLink = await getAudioLink(currentTrack.title, currentTrack.artist);
+                        setAudioLoading(true);
+                        // Tentativa 1: Busca com "lyrics"
+                        let serverLink = await getAudioLink(currentTrack.title, currentTrack.artist);
+                        
+                        // Tentativa 2: Busca simples se falhar (Fallback interno)
+                        if (!serverLink) {
+                             // Tenta buscar sem a palavra "lyrics"
+                             console.log("Tentando busca simplificada...");
+                             const simpleSearch = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist}`);
+                             try {
+                                 const res = await fetch(`https://api.piped.ot.ax/search?q=${simpleSearch}&filter=music_songs`);
+                                 const data = await res.json();
+                                 if (data.items && data.items.length > 0) {
+                                     const vid = data.items[0].url.split('v=')[1];
+                                     serverLink = `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${vid}`;
+                                 }
+                             } catch(e){}
+                        }
+
                         if (serverLink) {
                             src = serverLink;
                         } else {
                             showToast("Busca falhou. Usando preview.");
-                            setSourceMode('preview'); 
+                            setSourceMode('preview'); // Fallback final
                             src = currentTrack.previewUrl;
                             setAudioLoading(false);
                         }
@@ -342,6 +362,7 @@
                 if (currentTrack?.title === t.title) {
                     setShowFullScreenPlayer(true);
                 } else {
+                    // MUDANÇA: AGORA O PADRÃO É 'FULL' (SERVIDOR)
                     setSourceMode((BACKEND_URL && !t.isLocal) ? 'full' : 'preview'); 
                     setCurrentTrack(t); 
                     setIsPlaying(true); 
