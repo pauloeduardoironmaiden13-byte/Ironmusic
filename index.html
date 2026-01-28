@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-    <title>IronMusic AI</title>
+    <title>IronMusic Global</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,7 @@
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Firebase SDKs -->
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -29,77 +29,31 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #000; color: white; -webkit-tap-highlight-color: transparent; overflow: hidden; }
         h1, h2, h3, .rock-font { font-family: 'Oswald', sans-serif; }
-        
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
         .gradient-spot {
-            position: absolute;
-            top: -100px;
-            left: -100px;
-            width: 400px;
-            height: 400px;
-            border-radius: 50%;
-            filter: blur(80px);
-            z-index: 0;
-            opacity: 0.6;
-            pointer-events: none;
-            transition: background 0.5s ease;
+            position: absolute; top: -100px; left: -100px; width: 400px; height: 400px;
+            border-radius: 50%; filter: blur(80px); z-index: 0; opacity: 0.6; pointer-events: none;
         }
-
         .theme-yellow-spot { background: radial-gradient(circle, #854d0e 0%, transparent 70%); }
         .theme-purple-spot { background: radial-gradient(circle, #581c87 0%, transparent 70%); }
         .theme-green-spot  { background: radial-gradient(circle, #14532d 0%, transparent 70%); }
         
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #fff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        .loader { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         .vinyl-spin { animation: spin 8s linear infinite; }
         .vinyl-paused { animation-play-state: paused; }
+        .vinyl-texture { background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px); }
+
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #fff; cursor: pointer; margin-top: -4px; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #333; border-radius: 2px; }
         
-        .vinyl-texture {
-            background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px);
-        }
-
-        /* Range Slider Customizado */
-        input[type=range] {
-            -webkit-appearance: none;
-            width: 100%;
-            background: transparent;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 12px;
-            width: 12px;
-            border-radius: 50%;
-            background: #ffffff;
-            cursor: pointer;
-            margin-top: -4px; 
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 4px;
-            cursor: pointer;
-            background: #4b5563;
-            border-radius: 2px;
-        }
-
-        .toast {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(50, 50, 50, 0.9);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 12px;
-            z-index: 100;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-        }
+        .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #444; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 12px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; width: 80%; max-width: 300px; }
         .toast.show { opacity: 1; }
+        
+        .source-badge { font-size: 10px; padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.1); backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1); color: #ccc; }
     </style>
 </head>
 <body>
@@ -108,7 +62,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- CONFIGURAÇÕES ---
         const firebaseConfig = {
             apiKey: "AIzaSyBwG_7eZhTMRSIchNgu_r_dZfSWoKMie4s",
             authDomain: "ironmusic-727bb.firebaseapp.com",
@@ -117,36 +70,27 @@
             messagingSenderId: "1098477636469",
             appId: "1:1098477636469:web:b991864533302d78a1613c"
         };
-
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
-        const BACKEND_URL = "https://ironmusic-api.onrender.com";
         
-        // --- COLOQUE SUA CHAVE AQUI ---
-        const YOUTUBE_API_KEY = "AIzaSyDW4fEAz_MWn2q3jJZtZ0Iah-ylvkIzLGo"; 
+        // --- PROXIES DE ROTAÇÃO (PARA VENCER O BLOQUEIO DO GITHUB) ---
+        const PROXIES = [
+            "https://api.allorigins.win/raw?url=",
+            "https://corsproxy.io/?",
+            "https://thingproxy.freeboard.io/fetch/"
+        ];
 
         // Inicialização Firebase
-        let db = null;
-        let auth = null;
-        let isFirebaseDisabled = false;
-
-        if (firebaseConfig.projectId === "ironmusic-727bb") {
-            isFirebaseDisabled = true;
-        } else {
+        let db = null; let auth = null; let isFirebaseDisabled = false;
+        if (firebaseConfig.projectId === "ironmusic-727bb") isFirebaseDisabled = true;
+        else {
             try {
-                if (typeof firebase !== 'undefined' && firebase.apps.length === 0) {
-                    firebase.initializeApp(firebaseConfig);
-                    db = firebase.firestore();
-                    auth = firebase.auth();
-                } else if (typeof firebase !== 'undefined') {
-                    db = firebase.firestore();
-                    auth = firebase.auth();
-                }
+                if (typeof firebase !== 'undefined' && firebase.apps.length === 0) { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); auth = firebase.auth(); }
+                else if (typeof firebase !== 'undefined') { db = firebase.firestore(); auth = firebase.auth(); }
             } catch (e) { isFirebaseDisabled = true; }
         }
 
-        // Ícones
         const Icons = {
-            Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>,
+            Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>,
             Search: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
             Play: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
             Pause: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>,
@@ -155,8 +99,7 @@
             Heart: ({ filled, ...p }) => <svg {...p} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>,
             ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
             ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>,
-            Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-            Server: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+            Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         };
 
         function App() {
@@ -170,33 +113,31 @@
             const [query, setQuery] = useState('');
             const [searchResults, setSearchResults] = useState([]);
             const [loading, setLoading] = useState(false);
-            const [toastMsg, setToastMsg] = useState('');
             
-            // source: 'preview' (iTunes) | 'full' (Server) | 'local' (Arquivo)
-            const [sourceMode, setSourceMode] = useState(BACKEND_URL ? 'full' : 'preview'); 
+            const [sourceLabel, setSourceLabel] = useState('');
             const [audioLoading, setAudioLoading] = useState(false);
-
+            const [toastMsg, setToastMsg] = useState('');
             const [currentTime, setCurrentTime] = useState(0);
             const [duration, setDuration] = useState(0);
-
-            const [useLocalStorage, setUseLocalStorage] = useState(isFirebaseDisabled);
             const [geminiData, setGeminiData] = useState(null);
             const [isGeminiLoading, setIsGeminiLoading] = useState(false);
+            const [useLocalStorage, setUseLocalStorage] = useState(isFirebaseDisabled);
 
             const audioRef = useRef(new Audio());
             const fileInputRef = useRef(null);
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
+            // Auth
             useEffect(() => { if (!isFirebaseDisabled && auth) auth.signInAnonymously().catch(()=>{ setUseLocalStorage(true); }); }, []);
 
+            // Data Load
             useEffect(() => {
                 const loadLocal = (key, setter) => { try { const d = localStorage.getItem(key); if(d) setter(JSON.parse(d)); } catch(e){} };
                 if (!isFirebaseDisabled && db && !useLocalStorage) {
                     try {
-                        const u1 = db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d=>({id:d.id,...d.data()}))), () => { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); });
-                        const u2 = db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), () => { setUseLocalStorage(true); loadLocal('iron_history', setHistory); });
-                        return () => { u1(); u2(); };
+                        db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d=>({id:d.id,...d.data()}))), () => loadLocal('iron_likedSongs', setLikedSongs));
+                        db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), () => loadLocal('iron_history', setHistory));
                     } catch(e) { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); }
                 } else { loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); }
             }, [useLocalStorage]);
@@ -213,124 +154,148 @@
                 if (!useLocalStorage && !isFirebaseDisabled && db) db.collection('history').add({...t, addedAt: new Date().toISOString()}).catch(()=>{});
             };
 
+            // --- LÓGICA DE ÁUDIO ROBUSTA (PROXY) ---
+            const cleanString = (str) => {
+                return str.replace(/\(.*\)|\[.*\]/g, '') 
+                          .replace(/-.*remaster.*/i, '') 
+                          .replace(/feat\..*/i, '') 
+                          .replace(/remaster/i, '')
+                          .trim();
+            };
+
+            const fetchFullAudio = async (title, artist) => {
+                setAudioLoading(true);
+                let audioUrl = null;
+                let source = "";
+
+                const cleanQuery = cleanString(`${title} ${artist}`);
+                console.log("Buscando áudio (Limpo):", cleanQuery);
+
+                // Tenta buscar no Saavn usando Rotação de Proxies
+                const saavnTarget = `https://saavn.dev/api/search/songs?query=${encodeURIComponent(cleanQuery)}`;
+                
+                for (const proxy of PROXIES) {
+                    try {
+                        const finalUrl = proxy + encodeURIComponent(saavnTarget);
+                        console.log("Tentando proxy:", proxy);
+                        
+                        const res = await fetch(finalUrl);
+                        const rawData = await res.json();
+                        
+                        // Alguns proxies retornam o JSON dentro de 'contents'
+                        const data = rawData.contents ? JSON.parse(rawData.contents) : rawData;
+                        
+                        let results = data.data ? data.data.results : data.results; 
+                        
+                        if (results && results.length > 0) {
+                            const song = results[0];
+                            if (song.downloadUrl) {
+                                if (Array.isArray(song.downloadUrl)) {
+                                     audioUrl = song.downloadUrl.find(u => u.quality === "320kbps")?.url || song.downloadUrl[song.downloadUrl.length-1].url;
+                                } else {
+                                     audioUrl = song.downloadUrl[4]?.link || song.downloadUrl[3]?.link || song.downloadUrl; 
+                                }
+                            }
+                            if (audioUrl) {
+                                source = "Alta Qualidade (Saavn)";
+                                break;
+                            }
+                        }
+                    } catch(e) { console.warn("Proxy falhou:", e); }
+                }
+
+                // Fallback: YouTube Audio via Piped (Também com proxy se necessário)
+                if (!audioUrl) {
+                    try {
+                        const pipedUrl = `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(cleanQuery)}&filter=music_songs`;
+                        const res = await fetch(pipedUrl); // Piped geralmente tem CORS liberado
+                        const data = await res.json();
+                        if (data.items && data.items.length > 0) {
+                            const vid = data.items[0].url.split('v=')[1];
+                            const streamRes = await fetch(`https://pipedapi.kavin.rocks/streams/${vid}`);
+                            const streamData = await streamRes.json();
+                            const audioStream = streamData.audioStreams.find(s => s.mimeType.includes("audio/mp4"));
+                            if (audioStream) {
+                                audioUrl = audioStream.url;
+                                source = "YouTube HQ Audio";
+                            }
+                        }
+                    } catch(e) { console.warn("Piped falhou"); }
+                }
+
+                return audioUrl ? { url: audioUrl, source: source } : null;
+            };
+
             useEffect(() => {
                 const audio = audioRef.current;
+                
+                const loadAudio = async () => {
+                    if (!currentTrack) return;
+                    
+                    if (currentTrack.isLocal) {
+                        audio.src = currentTrack.previewUrl;
+                        setSourceLabel("Arquivo Local");
+                        if (isPlaying) audio.play();
+                        return;
+                    }
+
+                    if (currentTrack.fullAudioUrl) {
+                        if (audio.src !== currentTrack.fullAudioUrl) {
+                            audio.src = currentTrack.fullAudioUrl;
+                            setSourceLabel(currentTrack.audioSourceLabel);
+                            if(isPlaying) audio.play();
+                        }
+                    } else {
+                        setAudioLoading(true);
+                        setSourceLabel("Buscando fonte...");
+                        
+                        const result = await fetchFullAudio(currentTrack.title, currentTrack.artist);
+                        
+                        if (result) {
+                            setCurrentTrack(prev => ({ ...prev, fullAudioUrl: result.url, audioSourceLabel: result.source }));
+                            setSourceLabel(result.source);
+                            audio.src = result.url;
+                            if (isPlaying) audio.play().catch(e => {
+                                console.log("Play bloqueado, aguardando interação");
+                                setIsPlaying(false);
+                            });
+                        } else {
+                            showToast("Completa não encontrada. Tocando Preview.");
+                            setSourceLabel("iTunes Preview (30s)");
+                            audio.src = currentTrack.previewUrl;
+                            if (isPlaying) audio.play();
+                        }
+                        setAudioLoading(false);
+                    }
+                };
+
+                loadAudio();
+
                 const updateTime = () => setCurrentTime(audio.currentTime);
                 const updateDuration = () => setDuration(audio.duration);
                 const onEnded = () => setIsPlaying(false);
-                const onCanPlay = () => setAudioLoading(false);
-                const onWaiting = () => setAudioLoading(true);
+                const onError = () => {
+                    if (audio.src && audio.src !== currentTrack.previewUrl) {
+                        console.log("Erro no stream, voltando para preview");
+                        showToast("Erro no stream. Usando Preview.");
+                        audio.src = currentTrack.previewUrl;
+                        setSourceLabel("iTunes Preview (Erro)");
+                        if(isPlaying) audio.play();
+                    }
+                };
 
                 audio.addEventListener('timeupdate', updateTime);
                 audio.addEventListener('loadedmetadata', updateDuration);
                 audio.addEventListener('ended', onEnded);
-                audio.addEventListener('canplay', onCanPlay);
-                audio.addEventListener('waiting', onWaiting);
+                audio.addEventListener('error', onError);
 
                 return () => {
                     audio.removeEventListener('timeupdate', updateTime);
                     audio.removeEventListener('loadedmetadata', updateDuration);
                     audio.removeEventListener('ended', onEnded);
-                    audio.removeEventListener('canplay', onCanPlay);
-                    audio.removeEventListener('waiting', onWaiting);
+                    audio.removeEventListener('error', onError);
                 };
-            }, []);
-
-            // --- FUNÇÃO DE BUSCA VIA API OFICIAL ---
-            const getAudioLink = async (title, artist) => {
-                const search = encodeURIComponent(`${title} ${artist} lyrics`);
-                
-                // 1. TENTATIVA COM API OFICIAL (Se a chave estiver configurada)
-                if (YOUTUBE_API_KEY && YOUTUBE_API_KEY !== "COLE_SUA_CHAVE_YOUTUBE_AQUI") {
-                    try {
-                        const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${search}&type=video&key=${YOUTUBE_API_KEY}&maxResults=1`);
-                        const data = await res.json();
-                        if (data.items && data.items.length > 0) {
-                            const videoId = data.items[0].id.videoId;
-                            console.log("Encontrado via API Oficial:", videoId);
-                            // Envia para o seu servidor Render processar
-                            return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
-                        }
-                    } catch (e) {
-                        console.warn("Erro na API oficial, tentando fallback...", e);
-                    }
-                }
-
-                // 2. FALLBACK (APIs Públicas - Caso a chave oficial não seja colocada ou falhe)
-                const apis = [
-                    `https://api.piped.ot.ax/search?q=${search}&filter=music_songs`,
-                    `https://pipedapi.kavin.rocks/search?q=${search}&filter=music_songs`,
-                    `https://pipedapi.drgns.space/search?q=${search}&filter=music_songs`
-                ];
-
-                for (const api of apis) {
-                    try {
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 2000);
-                        const res = await fetch(api, { signal: controller.signal });
-                        clearTimeout(timeoutId);
-
-                        if (!res.ok) continue;
-                        const data = await res.json();
-                        
-                        let videoId = null;
-                        if (data.items && data.items.length > 0) {
-                            videoId = data.items[0].url.split('v=')[1];
-                        }
-
-                        if (videoId) {
-                            console.log("Encontrado via API Pública:", videoId);
-                            return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
-                        }
-                    } catch (e) { continue; }
-                }
-                return null;
-            };
-
-            // --- LÓGICA DE ÁUDIO ---
-            useEffect(() => {
-                if (!currentTrack) return;
-
-                const loadAndPlay = async () => {
-                    let src = "";
-                    setAudioLoading(true); 
-                    
-                    if (currentTrack.isLocal) {
-                        src = currentTrack.previewUrl;
-                        setAudioLoading(false);
-                    } else if (sourceMode === 'full' && BACKEND_URL) {
-                        const serverLink = await getAudioLink(currentTrack.title, currentTrack.artist);
-                        if (serverLink) {
-                            src = serverLink;
-                        } else {
-                            showToast("Busca falhou. Usando preview.");
-                            setSourceMode('preview'); 
-                            src = currentTrack.previewUrl;
-                            setAudioLoading(false);
-                        }
-                    } else {
-                        src = currentTrack.previewUrl;
-                        setAudioLoading(false);
-                    }
-
-                    if (src && audioRef.current.src !== src) {
-                        audioRef.current.src = src;
-                        if (isPlaying) audioRef.current.play().catch(e => { setIsPlaying(false); });
-                    } else if (src) {
-                        if (isPlaying) audioRef.current.play().catch(()=>{}); else audioRef.current.pause();
-                    }
-                };
-
-                loadAndPlay();
-
-            }, [currentTrack, isPlaying, sourceMode]);
-
-            const formatTime = (time) => {
-                if (isNaN(time)) return "0:00";
-                const minutes = Math.floor(time / 60);
-                const seconds = Math.floor(time % 60);
-                return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-            };
+            }, [currentTrack, isPlaying]);
 
             const handleSeek = (e) => {
                 const newTime = e.target.value;
@@ -354,16 +319,11 @@
             useEffect(() => { if ((view === 'lyrics' || view === 'chords') && currentTrack && !geminiData) fetchGemini(currentTrack); }, [view, currentTrack]);
 
             const handlePlay = (t) => {
-                if (currentTrack?.title === t.title) {
-                    setShowFullScreenPlayer(true);
-                } else {
-                    setSourceMode((BACKEND_URL && !t.isLocal) ? 'full' : 'preview'); 
-                    setCurrentTrack(t); 
-                    setIsPlaying(true); 
-                    setGeminiData(null); 
-                    setShowFullScreenPlayer(true); 
-                    addToHistory(t);
-                }
+                setCurrentTrack(t);
+                setIsPlaying(true);
+                setShowFullScreenPlayer(true);
+                setGeminiData(null);
+                addToHistory(t);
             };
 
             const handleFileUpload = (e) => {
@@ -375,13 +335,20 @@
             const searchMusic = async () => {
                 if (!query) return; setLoading(true);
                 try {
-                    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20`);
-                    const d = await r.json();
+                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20`);
+                    const d = await res.json();
                     setSearchResults(d.results.map(i => ({
                         id: i.trackId, title: i.trackName, artist: i.artistName,
-                        artwork: i.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'), previewUrl: i.previewUrl
+                        artwork: i.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'),
+                        previewUrl: i.previewUrl
                     })));
                 } catch(e) { showToast("Erro na busca."); } finally { setLoading(false); }
+            };
+
+            const formatTime = (t) => {
+                if(isNaN(t)) return "0:00";
+                const m = Math.floor(t/60), s = Math.floor(t%60);
+                return `${m}:${s<10?'0':''}${s}`;
             };
 
             const theme = activeTheme === 'purple' ? {spot:'theme-purple-spot', text:'text-purple-500'} : activeTheme === 'green' ? {spot:'theme-green-spot', text:'text-green-500'} : {spot:'theme-yellow-spot', text:'text-yellow-500'};
@@ -393,7 +360,9 @@
                     <div className={`toast ${toastMsg ? 'show' : ''}`}>{toastMsg}</div>
 
                     <div className="flex justify-between items-center p-4 pt-8 z-20 relative">
-                        <h1 className="text-2xl font-bold tracking-tighter italic">IRON<span className={theme.text}>MUSIC</span></h1>
+                        <h1 className="text-2xl font-bold tracking-tighter italic flex items-center gap-2">
+                            IRON<span className={theme.text}>MUSIC</span>
+                        </h1>
                         <div className="flex gap-2">
                             {['yellow', 'purple', 'green'].map(c => <button key={c} onClick={() => setActiveTheme(c)} className={`w-4 h-4 rounded-full bg-${c}-600 border ${activeTheme === c ? 'border-white' : 'border-transparent'}`}></button>)}
                         </div>
@@ -461,38 +430,30 @@
                         <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in">
                             <div className="flex justify-between items-center p-6 bg-black">
                                 <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
-                                <span className="text-xs tracking-widest text-gray-400">TOCANDO AGORA</span>
-                                <button><i className="fas fa-ellipsis-v text-xl"></i></button>
-                            </div>
-                            
-                            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
-                                <div className="relative w-72 h-72 md:w-96 md:h-96">
-                                    <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying && !audioLoading ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
-                                        <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
-                                        {audioLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full"><div className="loader"></div></div>}
-                                    </div>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-xs uppercase tracking-widest text-gray-400">PLAYER</span>
+                                    <span className="source-badge mt-1">{audioLoading ? "Procurando..." : sourceLabel}</span>
                                 </div>
-                                
-                                {!currentTrack.isLocal && BACKEND_URL && (
-                                    <div className="mt-8 flex gap-2 z-30">
-                                        <button onClick={() => setSourceMode('full')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'full' ? 'bg-green-600 text-white border-green-600' : 'border-white/30 text-white/50'}`}>
-                                            FONTE: SERVIDOR (COMPLETA)
-                                        </button>
-                                        <button onClick={() => setSourceMode('preview')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'preview' ? 'bg-white text-black' : 'border-white/30 text-white/50'}`}>
-                                            FONTE: ITUNES (30s)
-                                        </button>
-                                    </div>
-                                )}
+                                <div className="w-8"></div>
                             </div>
 
-                            <div className="p-8 pb-12 space-y-6">
+                            <div className="flex-1 w-full bg-black px-4 flex flex-col items-center justify-center relative">
+                                <div className="relative w-72 h-72">
+                                    <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying && !audioLoading ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
+                                        <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
+                                        {audioLoading && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center"><div className="loader"></div></div>}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-8 pb-12 space-y-6 bg-black">
                                 <div className="flex justify-between items-end">
-                                    <div><h2 className="text-2xl font-bold mb-1">{currentTrack.title}</h2><p className={theme.text}>{currentTrack.artist}</p></div>
+                                    <div><h2 className="text-2xl font-bold text-white mb-1">{currentTrack.title}</h2><p className={`text-lg ${theme.text}`}>{currentTrack.artist}</p></div>
                                     <button onClick={() => toggleLike(currentTrack)}><Icons.Heart width={28} filled={isLiked} className={isLiked ? theme.text : "text-gray-400"} /></button>
                                 </div>
 
                                 <div className="w-full mt-4">
-                                    <input type="range" min="0" max={duration || 0} value={currentTime} onChange={handleSeek} className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer" style={{accentColor: "white"}} />
+                                    <input type="range" min="0" max={duration || 0} value={currentTime} onChange={handleSeek} />
                                     <div className="flex justify-between text-xs text-gray-500 mt-1"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
                                 </div>
 
