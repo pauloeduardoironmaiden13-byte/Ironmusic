@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-    <title>IronMusic AI - Teste de Busca</title>
+    <title>IronMusic AI - Player</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -100,26 +100,20 @@
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
-            // --- BUSCA ID DO VÍDEO (REMOVIDA A TRAVA DE TESTE FIXA) ---
+            // --- BUSCA ID DO VÍDEO ---
             const fetchYoutubeId = async (title, artist) => {
                 const q = encodeURIComponent(`${title} ${artist} lyrics`);
                 try {
-                    console.log(`Buscando ID no YouTube para: ${title} - ${artist}`);
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
                     
                     if (!res.ok) {
-                        showToast("Erro na API do YouTube (Cota ou Permissão)");
-                        console.error("Erro API YT:", res.status);
-                        return null;
+                        console.error("Erro API YT status:", res.status);
+                        return null; 
                     }
 
                     const data = await res.json();
                     if (data.items && data.items.length > 0) {
-                        const videoId = data.items[0].id.videoId;
-                        console.log("ID encontrado:", videoId);
-                        return videoId;
-                    } else {
-                        console.log("Nenhum vídeo encontrado");
+                        return data.items[0].id.videoId;
                     }
                 } catch(e) { console.error("Erro YT API", e); }
                 return null;
@@ -142,18 +136,17 @@
 
                     // Se não temos ID, busca agora
                     if (!currentTrack.youtubeId) { 
-                        showToast(`Buscando "${currentTrack.title}" no YouTube...`);
+                        // Tenta buscar o ID exato
                         const vid = await fetchYoutubeId(currentTrack.title, currentTrack.artist);
+                        
                         if (vid) {
+                            // Se achou, usa o ID
                             setCurrentTrack(prev => ({ ...prev, youtubeId: vid }));
                         } else {
-                            showToast("Vídeo não encontrado ou Erro de API.");
-                            // Fallback para preview se tiver
-                            if(currentTrack.previewUrl) {
-                                setSourceMode('preview');
-                                audioRef.current.src = currentTrack.previewUrl;
-                                if(isPlaying) audioRef.current.play();
-                            }
+                            // Se NÃO achou (erro de API ou não encontrado), 
+                            // define um ID especial para ativar o "Modo de Busca Embed"
+                            // Isso garante que a tela do YouTube apareça de qualquer jeito.
+                            setCurrentTrack(prev => ({ ...prev, youtubeId: 'SEARCH_FALLBACK' }));
                         }
                         return; 
                     }
@@ -172,7 +165,13 @@
             const getYoutubeEmbed = () => {
                 if (!currentTrack || !currentTrack.youtubeId) return '';
                 const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
-                // URL DE EMBED COM PARÂMETROS DE CONTROLE (NÃO ATRAPALHAM A VISUALIZAÇÃO)
+
+                // Lógica de Fallback: Se não tem ID exato, usa a busca embedada
+                if (currentTrack.youtubeId === 'SEARCH_FALLBACK') {
+                    const searchQuery = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist}`);
+                    return `https://www.youtube.com/embed?listType=search&list=${searchQuery}&autoplay=1${origin}`;
+                }
+
                 return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1${origin}`;
             };
 
@@ -301,8 +300,8 @@
                                             allowFullScreen
                                         />
                                         <div className="mt-6 flex flex-col items-center gap-2">
-                                            <p className="text-gray-500 text-xs">ID do YouTube: {currentTrack.youtubeId}</p>
-                                            <a href={`https://www.youtube.com/watch?v=${currentTrack.youtubeId}`} target="_blank" className="text-xs border border-white/20 px-3 py-1 rounded-full text-white/50 hover:bg-white/10">Abrir no YouTube</a>
+                                            {currentTrack.youtubeId !== 'SEARCH_FALLBACK' && <p className="text-gray-500 text-xs">ID do YouTube: {currentTrack.youtubeId}</p>}
+                                            {currentTrack.youtubeId !== 'SEARCH_FALLBACK' && <a href={`https://www.youtube.com/watch?v=${currentTrack.youtubeId}`} target="_blank" className="text-xs border border-white/20 px-3 py-1 rounded-full text-white/50 hover:bg-white/10">Abrir no YouTube</a>}
                                         </div>
                                     </div>
                                 ) : (
@@ -311,7 +310,6 @@
                                             <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
                                             <div className="absolute w-4 h-4 bg-white rounded-full"></div>
                                         </div>
-                                        <p className="absolute -bottom-10 w-full text-center text-gray-500 text-xs animate-pulse">Carregando YouTube...</p>
                                     </div>
                                 )}
                             </div>
