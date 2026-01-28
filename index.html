@@ -31,7 +31,6 @@
         h1, h2, h3, .rock-font { font-family: 'Oswald', sans-serif; }
         
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
         .gradient-spot {
             position: absolute;
@@ -84,7 +83,6 @@
             border-radius: 2px;
         }
 
-        /* Toast Notification */
         .toast {
             position: fixed;
             bottom: 80px;
@@ -109,9 +107,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // ==========================================
-        // CONFIGURAÇÕES
-        // ==========================================
+        // --- CONFIGURAÇÕES ---
         const firebaseConfig = {
             apiKey: "AIzaSyBwG_7eZhTMRSIchNgu_r_dZfSWoKMie4s",
             authDomain: "ironmusic-727bb.firebaseapp.com",
@@ -122,7 +118,6 @@
         };
 
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
-        
         const BACKEND_URL = "https://ironmusic-api.onrender.com"; 
 
         // Inicialização Firebase
@@ -142,10 +137,7 @@
                     db = firebase.firestore();
                     auth = firebase.auth();
                 }
-            } catch (e) { 
-                console.warn("Erro Firebase:", e); 
-                isFirebaseDisabled = true;
-            }
+            } catch (e) { isFirebaseDisabled = true; }
         }
 
         // Ícones
@@ -160,8 +152,7 @@
             ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
             ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>,
             Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-            Youtube: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>,
-            ExternalLink: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Server: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
         };
 
         function App() {
@@ -177,9 +168,10 @@
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
             
+            // source: 'preview' (iTunes) | 'full' (Server) | 'local' (Arquivo)
             const [sourceMode, setSourceMode] = useState('preview'); 
+            const [audioLoading, setAudioLoading] = useState(false);
 
-            // Estados de Tempo da Música
             const [currentTime, setCurrentTime] = useState(0);
             const [duration, setDuration] = useState(0);
 
@@ -188,126 +180,110 @@
             const [isGeminiLoading, setIsGeminiLoading] = useState(false);
 
             const audioRef = useRef(new Audio());
-            const youtubeRef = useRef(null);
             const fileInputRef = useRef(null);
 
-            const showToast = (msg) => {
-                setToastMsg(msg);
-                setTimeout(() => setToastMsg(''), 3000);
-            };
+            const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
-            // Login Anônimo
-            useEffect(() => {
-                if (!isFirebaseDisabled && auth) {
-                    auth.signInAnonymously().catch(e => {
-                        console.log("Modo Offline");
-                        setUseLocalStorage(true);
-                    });
-                }
-            }, []);
+            useEffect(() => { if (!isFirebaseDisabled && auth) auth.signInAnonymously().catch(()=>{ setUseLocalStorage(true); }); }, []);
 
-            // Carregar Favoritos/Histórico
             useEffect(() => {
-                const loadLocal = (key, setter) => {
-                    try { const data = localStorage.getItem(key); if (data) setter(JSON.parse(data)); } catch(e) {}
-                };
-                
+                const loadLocal = (key, setter) => { try { const d = localStorage.getItem(key); if(d) setter(JSON.parse(d)); } catch(e){} };
                 if (!isFirebaseDisabled && db && !useLocalStorage) {
                     try {
-                        const u1 = db.collection('favorites').onSnapshot(
-                            s => setLikedSongs(s.docs.map(d=>({id:d.id,...d.data()}))), 
-                            () => { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); }
-                        );
-                        const u2 = db.collection('history').limit(20).onSnapshot(
-                            s => setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), 
-                            () => { setUseLocalStorage(true); loadLocal('iron_history', setHistory); }
-                        );
+                        const u1 = db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d=>({id:d.id,...d.data()}))), () => { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); });
+                        const u2 = db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), () => { setUseLocalStorage(true); loadLocal('iron_history', setHistory); });
                         return () => { u1(); u2(); };
-                    } catch(e) {
-                        setUseLocalStorage(true); 
-                        loadLocal('iron_likedSongs', setLikedSongs); 
-                        loadLocal('iron_history', setHistory);
-                    }
-                } else {
-                    loadLocal('iron_likedSongs', setLikedSongs);
-                    loadLocal('iron_history', setHistory);
-                }
+                    } catch(e) { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); }
+                } else { loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); }
             }, [useLocalStorage]);
 
-            const toggleLike = (track) => {
-                const alreadyLiked = likedSongs.find(s => s.title === track.title);
-                let newFavs = alreadyLiked ? likedSongs.filter(s => s.title !== track.title) : [...likedSongs, track];
-                setLikedSongs(newFavs);
-                localStorage.setItem('iron_likedSongs', JSON.stringify(newFavs));
-
-                if (!useLocalStorage && !isFirebaseDisabled && db) {
-                    if (alreadyLiked) db.collection('favorites').doc(alreadyLiked.id).delete().catch(()=>{});
-                    else db.collection('favorites').add(track).catch(()=>{});
-                }
+            const toggleLike = (t) => {
+                const liked = likedSongs.find(s => s.title === t.title);
+                let newFavs = liked ? likedSongs.filter(s => s.title !== t.title) : [...likedSongs, t];
+                setLikedSongs(newFavs); localStorage.setItem('iron_likedSongs', JSON.stringify(newFavs));
+                if (!useLocalStorage && !isFirebaseDisabled && db) { if(liked) db.collection('favorites').doc(liked.id).delete().catch(()=>{}); else db.collection('favorites').add(t).catch(()=>{}); }
             };
 
-            const addToHistory = (track) => {
-                const newHistory = [track, ...history].slice(0, 10);
-                setHistory(newHistory);
-                localStorage.setItem('iron_history', JSON.stringify(newHistory));
-
-                if (!useLocalStorage && !isFirebaseDisabled && db) {
-                    db.collection('history').add({ ...track, addedAt: new Date().toISOString() }).catch(()=>{});
-                }
+            const addToHistory = (t) => {
+                const h = [t, ...history].slice(0,10); setHistory(h); localStorage.setItem('iron_history', JSON.stringify(h));
+                if (!useLocalStorage && !isFirebaseDisabled && db) db.collection('history').add({...t, addedAt: new Date().toISOString()}).catch(()=>{});
             };
 
-            // --- LISTENERS DE TEMPO (NOVO) ---
             useEffect(() => {
                 const audio = audioRef.current;
-                
                 const updateTime = () => setCurrentTime(audio.currentTime);
                 const updateDuration = () => setDuration(audio.duration);
                 const onEnded = () => setIsPlaying(false);
+                const onCanPlay = () => setAudioLoading(false);
+                const onWaiting = () => setAudioLoading(true);
 
                 audio.addEventListener('timeupdate', updateTime);
                 audio.addEventListener('loadedmetadata', updateDuration);
                 audio.addEventListener('ended', onEnded);
+                audio.addEventListener('canplay', onCanPlay);
+                audio.addEventListener('waiting', onWaiting);
 
                 return () => {
                     audio.removeEventListener('timeupdate', updateTime);
                     audio.removeEventListener('loadedmetadata', updateDuration);
                     audio.removeEventListener('ended', onEnded);
+                    audio.removeEventListener('canplay', onCanPlay);
+                    audio.removeEventListener('waiting', onWaiting);
                 };
             }, []);
+
+            // --- FUNÇÃO PARA PEGAR URL DO SERVER ---
+            const getAudioLink = async (title, artist) => {
+                try {
+                    const search = encodeURIComponent(`${title} ${artist} lyrics`);
+                    const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${search}&filter=music_songs`);
+                    const data = await res.json();
+                    if (data.items && data.items.length > 0) {
+                        const videoId = data.items[0].url.split('v=')[1];
+                        return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
+                    }
+                    return null;
+                } catch (e) {
+                    console.error("Erro ao buscar link", e);
+                    return null;
+                }
+            };
 
             // --- LÓGICA DE ÁUDIO ---
             useEffect(() => {
                 if (!currentTrack) return;
-                
-                if (sourceMode === 'youtube') {
-                    audioRef.current.pause();
-                    if(youtubeRef.current && youtubeRef.current.contentWindow) {
-                        const command = isPlaying ? 'playVideo' : 'pauseVideo';
-                        setTimeout(() => {
-                            try { youtubeRef.current.contentWindow.postMessage(JSON.stringify({'event': 'command', 'func': command}), '*'); } catch(e){}
-                        }, 500);
-                    }
-                } else {
-                    if(youtubeRef.current && youtubeRef.current.contentWindow) {
-                        try { youtubeRef.current.contentWindow.postMessage(JSON.stringify({'event': 'command', 'func': 'pauseVideo'}), '*'); } catch(e){}
-                    }
+
+                const loadAndPlay = async () => {
+                    let src = "";
                     
-                    if (audioRef.current.src !== currentTrack.previewUrl) {
-                        audioRef.current.src = currentTrack.previewUrl;
+                    if (currentTrack.isLocal) {
+                        src = currentTrack.previewUrl;
+                    } else if (sourceMode === 'preview') {
+                        src = currentTrack.previewUrl;
+                    } else if (sourceMode === 'full' && BACKEND_URL) {
+                        setAudioLoading(true);
+                        const serverLink = await getAudioLink(currentTrack.title, currentTrack.artist);
+                        if (serverLink) {
+                            src = serverLink;
+                        } else {
+                            showToast("Erro no servidor. Usando preview.");
+                            setSourceMode('preview'); // Fallback
+                            src = currentTrack.previewUrl;
+                        }
                     }
-                    
-                    if (isPlaying) {
-                        audioRef.current.play().catch(e => {
-                            console.log("Bloqueio de Autoplay", e);
-                            setIsPlaying(false);
-                        });
-                    } else {
-                        audioRef.current.pause();
+
+                    if (src && audioRef.current.src !== src) {
+                        audioRef.current.src = src;
+                        if (isPlaying) audioRef.current.play().catch(e => { setIsPlaying(false); });
+                    } else if (src) {
+                        if (isPlaying) audioRef.current.play().catch(()=>{}); else audioRef.current.pause();
                     }
-                }
+                };
+
+                loadAndPlay();
+
             }, [currentTrack, isPlaying, sourceMode]);
 
-            // Formatação de Tempo (MM:SS)
             const formatTime = (time) => {
                 if (isNaN(time)) return "0:00";
                 const minutes = Math.floor(time / 60);
@@ -315,113 +291,65 @@
                 return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
             };
 
-            // Seek (Arrastar a barra)
             const handleSeek = (e) => {
                 const newTime = e.target.value;
                 audioRef.current.currentTime = newTime;
                 setCurrentTime(newTime);
             };
 
-            // Gemini AI
-            const fetchGeminiData = async (track) => {
+            const fetchGemini = async (t) => {
                 if (!GEMINI_API_KEY) return;
-                setIsGeminiLoading(true);
-                setGeminiData(null);
-                const prompt = `Aja como um músico. Retorne JSON puro para "${track.title}" de "${track.artist}": {"original_lyrics": "letra original", "translated_lyrics": "tradução pt-br", "chords": "cifra texto", "tabs": "tabs texto"}`;
+                setIsGeminiLoading(true); setGeminiData(null);
                 try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                        method: "POST", headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({ contents: [{ parts: [{ text: `JSON lyrics, translation, chords, tabs for "${t.title}" - "${t.artist}"` }] }] })
                     });
-                    const data = await response.json();
-                    let text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
-                    setGeminiData(JSON.parse(text));
-                } catch (error) { setGeminiData({ error: "Erro na IA." }); } finally { setIsGeminiLoading(false); }
+                    const d = await r.json();
+                    setGeminiData(JSON.parse(d.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim()));
+                } catch(e){} finally { setIsGeminiLoading(false); }
             };
 
-            useEffect(() => {
-                if ((view === 'lyrics' || view === 'chords') && currentTrack && !geminiData && !isGeminiLoading) {
-                    fetchGeminiData(currentTrack);
-                }
-            }, [view, currentTrack]);
+            useEffect(() => { if ((view === 'lyrics' || view === 'chords') && currentTrack && !geminiData) fetchGemini(currentTrack); }, [view, currentTrack]);
 
-            const handlePlay = (track) => {
-                if (currentTrack?.title === track.title) {
-                    setShowFullScreenPlayer(true);
-                } else {
-                    setSourceMode(track.isLocal ? 'local' : 'preview'); 
-                    setCurrentTrack(track);
-                    setIsPlaying(true);
-                    setGeminiData(null);
-                    setShowFullScreenPlayer(true);
-                    addToHistory(track);
+            const handlePlay = (t) => {
+                if (currentTrack?.title === t.title) setShowFullScreenPlayer(true);
+                else {
+                    setSourceMode(t.isLocal ? 'local' : 'preview'); 
+                    setCurrentTrack(t); setIsPlaying(true); setGeminiData(null); setShowFullScreenPlayer(true); addToHistory(t);
                 }
             };
 
             const handleFileUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const url = URL.createObjectURL(file);
-                const localTrack = {
-                    id: Date.now(),
-                    title: file.name.replace(/\.[^/.]+$/, ""),
-                    artist: "Arquivo Local",
-                    artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3",
-                    previewUrl: url,
-                    isLocal: true
-                };
-                handlePlay(localTrack);
-                showToast("Arquivo local carregado!");
+                const f = e.target.files[0]; if(!f) return;
+                handlePlay({ id: Date.now(), title: f.name.replace(/\.[^/.]+$/, ""), artist: "Local", artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3", previewUrl: URL.createObjectURL(f), isLocal: true });
+                showToast("Arquivo carregado!");
             };
 
             const searchMusic = async () => {
-                if (!query) return;
-                setLoading(true);
+                if (!query) return; setLoading(true);
                 try {
-                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20`);
-                    const data = await res.json();
-                    setSearchResults(data.results.map(item => ({
-                        id: item.trackId,
-                        title: item.trackName,
-                        artist: item.artistName,
-                        artwork: item.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'),
-                        previewUrl: item.previewUrl
+                    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20`);
+                    const d = await r.json();
+                    setSearchResults(d.results.map(i => ({
+                        id: i.trackId, title: i.trackName, artist: i.artistName,
+                        artwork: i.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'), previewUrl: i.previewUrl
                     })));
-                } catch (e) { showToast("Erro na busca."); } finally { setLoading(false); }
+                } catch(e) { showToast("Erro na busca."); } finally { setLoading(false); }
             };
 
-            // URL YouTube
-            const getYoutubeUrl = () => {
-                if (!currentTrack) return '';
-                const term = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist} lyrics`);
-                const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
-                return `https://www.youtube.com/embed?listType=search&list=${term}&autoplay=1&playsinline=1&rel=0&enablejsapi=1${origin}`;
-            };
-
-            const getThemeData = () => {
-                switch(activeTheme) {
-                    case 'purple': return { spot: 'theme-purple-spot', text: 'text-purple-500', border: 'border-purple-500' };
-                    case 'green': return { spot: 'theme-green-spot', text: 'text-green-500', border: 'border-green-500' };
-                    default: return { spot: 'theme-yellow-spot', text: 'text-yellow-500', border: 'border-yellow-500' };
-                }
-            };
-            const theme = getThemeData();
+            const theme = activeTheme === 'purple' ? {spot:'theme-purple-spot', text:'text-purple-500'} : activeTheme === 'green' ? {spot:'theme-green-spot', text:'text-green-500'} : {spot:'theme-yellow-spot', text:'text-yellow-500'};
             const isLiked = currentTrack && likedSongs.some(s => s.title === currentTrack.title);
 
             return (
                 <div className="h-screen w-full flex flex-col relative">
                     <div className={`gradient-spot ${theme.spot}`}></div>
-                    
                     <div className={`toast ${toastMsg ? 'show' : ''}`}>{toastMsg}</div>
 
-                    <div className="flex justify-between items-center p-4 pt-8 bg-transparent z-20 relative">
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-2xl font-bold tracking-tighter italic">IRON<span className={theme.text}>MUSIC</span></h1>
-                        </div>
+                    <div className="flex justify-between items-center p-4 pt-8 z-20 relative">
+                        <h1 className="text-2xl font-bold tracking-tighter italic">IRON<span className={theme.text}>MUSIC</span></h1>
                         <div className="flex gap-2">
-                            <button onClick={() => setActiveTheme('yellow')} className={`w-4 h-4 rounded-full bg-yellow-600 border ${activeTheme === 'yellow' ? 'border-white' : 'border-transparent'}`}></button>
-                            <button onClick={() => setActiveTheme('purple')} className={`w-4 h-4 rounded-full bg-purple-600 border ${activeTheme === 'purple' ? 'border-white' : 'border-transparent'}`}></button>
-                            <button onClick={() => setActiveTheme('green')} className={`w-4 h-4 rounded-full bg-green-600 border ${activeTheme === 'green' ? 'border-white' : 'border-transparent'}`}></button>
+                            {['yellow', 'purple', 'green'].map(c => <button key={c} onClick={() => setActiveTheme(c)} className={`w-4 h-4 rounded-full bg-${c}-600 border ${activeTheme === c ? 'border-white' : 'border-transparent'}`}></button>)}
                         </div>
                     </div>
 
@@ -430,48 +358,22 @@
                             <div className="space-y-6 animate-fade-in">
                                 <div>
                                     <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold flex items-center gap-2">
-                                            <span className={theme.text}>•</span> Minhas Curtidas
-                                        </h2>
-                                        
-                                        <input type="file" accept="audio/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                                        <button onClick={() => fileInputRef.current.click()} className="flex items-center gap-2 text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full transition">
-                                            <Icons.Upload width={14}/> Importar MP3
-                                        </button>
+                                        <h2 className="text-xl font-bold flex items-center gap-2"><span className={theme.text}>•</span> Favoritos</h2>
+                                        <button onClick={() => fileInputRef.current.click()} className="text-xs bg-white/10 px-3 py-1 rounded-full flex gap-2"><Icons.Upload width={14}/> MP3</button>
+                                        <input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={handleFileUpload} />
                                     </div>
-
-                                    {likedSongs.length === 0 ? (
-                                        <div className="text-center py-10 opacity-50">
-                                            <p className="text-sm">Nenhuma música curtida ainda.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {likedSongs.map((track, idx) => (
-                                                <div key={idx} onClick={() => handlePlay(track)} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer">
-                                                     <img src={track.artwork} className="w-10 h-10 rounded" />
-                                                     <div className="flex-1 overflow-hidden">
-                                                        <p className="font-bold truncate text-sm text-white">{track.title}</p>
-                                                        <p className="text-xs text-gray-400 truncate">{track.artist}</p>
-                                                     </div>
-                                                     <Icons.Heart width={16} filled={true} className={theme.text} />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                    
-                                    {history.length > 0 && (
-                                        <div className="mt-8">
-                                            <h2 className="text-xl font-bold flex items-center gap-2 mb-4"><span className="text-gray-500">•</span> Ouvidas Recentemente</h2>
-                                            <div className="grid grid-cols-2 gap-3">
-                                                {history.map((track, idx) => (
-                                                    <div key={idx} onClick={() => handlePlay(track)} className="bg-white/5 p-3 rounded-lg hover:bg-white/10 cursor-pointer">
-                                                        <p className="font-bold truncate text-xs text-white">{track.title}</p>
-                                                        <p className="text-[10px] text-gray-500 truncate">{track.artist}</p>
-                                                    </div>
-                                                ))}
+                                    {likedSongs.length === 0 ? <p className="text-white/40 text-sm text-center py-10">Nada aqui ainda.</p> : 
+                                        <div className="space-y-2">{likedSongs.map((t, i) => (
+                                            <div key={i} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer">
+                                                <img src={t.artwork} className="w-10 h-10 rounded" />
+                                                <div className="flex-1 overflow-hidden"><p className="font-bold truncate text-sm">{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div>
+                                                <Icons.Heart width={16} filled={true} className={theme.text} />
                                             </div>
-                                        </div>
-                                    )}
+                                        ))}</div>
+                                    }
+                                    {history.length > 0 && <div className="mt-8"><h2 className="text-xl font-bold mb-4">• Recentes</h2>
+                                        <div className="grid grid-cols-2 gap-3">{history.map((t,i) => <div key={i} onClick={() => handlePlay(t)} className="bg-white/5 p-3 rounded-lg"><p className="font-bold truncate text-xs">{t.title}</p><p className="text-[10px] text-gray-500">{t.artist}</p></div>)}</div>
+                                    </div>}
                                 </div>
                             </div>
                         )}
@@ -479,25 +381,16 @@
                         {view === 'search' && (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="relative">
-                                    <input 
-                                        type="text" placeholder="Buscar no IronMusic..." 
-                                        className="w-full bg-white/10 border border-white/20 text-white font-bold p-4 pl-10 rounded-full outline-none focus:border-white transition placeholder-gray-400"
-                                        value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()}
-                                    />
+                                    <input type="text" placeholder="Buscar..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} />
                                     <div className="absolute left-4 top-4 text-gray-400"><Icons.Search width={20} /></div>
                                 </div>
-                                {loading && <div className="text-center py-4"><div className="loader mx-auto"></div></div>}
-                                <div className="space-y-2">
-                                    {searchResults.map(track => (
-                                        <div key={track.id} onClick={() => handlePlay(track)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/20 transition cursor-pointer">
-                                            <img src={track.artwork} className="w-12 h-12 rounded" />
-                                            <div className="flex-1 overflow-hidden">
-                                                <p className={`font-bold truncate ${currentTrack?.title === track.title ? theme.text : 'text-white'}`}>{track.title}</p>
-                                                <p className="text-xs text-gray-400 truncate">{track.artist}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                {loading && <div className="loader mx-auto"></div>}
+                                <div className="space-y-2">{searchResults.map(t => (
+                                    <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer">
+                                        <img src={t.artwork} className="w-12 h-12 rounded" />
+                                        <div className="flex-1 overflow-hidden"><p className={`font-bold truncate ${currentTrack?.title === t.title ? theme.text : ''}`}>{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div>
+                                    </div>
+                                ))}</div>
                             </div>
                         )}
 
@@ -505,34 +398,15 @@
                             <div className="animate-fade-in pb-20">
                                 {currentTrack ? (
                                     <div className="space-y-4">
-                                        <div className="flex items-center gap-4 border-b border-white/10 pb-4">
-                                            <img src={currentTrack.artwork} className="w-16 h-16 rounded shadow-lg" />
-                                            <div>
-                                                <h2 className="text-xl font-bold">{currentTrack.title}</h2>
-                                                <p className={theme.text}>{currentTrack.artist}</p>
-                                            </div>
-                                        </div>
-                                        {isGeminiLoading && <div className="flex flex-col items-center justify-center py-10"><div className="loader mb-4"></div><p className="text-xs text-gray-400">Gerando com IA...</p></div>}
+                                        <div className="flex gap-4 border-b border-white/10 pb-4"><img src={currentTrack.artwork} className="w-16 h-16 rounded shadow-lg" /><div><h2 className="text-xl font-bold">{currentTrack.title}</h2><p className={theme.text}>{currentTrack.artist}</p></div></div>
+                                        {isGeminiLoading && <div className="loader mx-auto"></div>}
                                         {!isGeminiLoading && geminiData && (
-                                            <>
-                                                {view === 'chords' && (
-                                                    <div className="bg-white/5 p-4 rounded-lg font-mono text-xs md:text-sm text-yellow-200 whitespace-pre-wrap overflow-x-auto">
-                                                        {geminiData.chords}
-                                                        <hr className="border-white/10 my-4"/>
-                                                        <div className="text-green-300">{geminiData.tabs}</div>
-                                                    </div>
-                                                )}
-                                                {view === 'lyrics' && (
-                                                    <div className="space-y-6">
-                                                        <div className="text-gray-200 whitespace-pre-line text-sm">{geminiData.original_lyrics}</div>
-                                                        <div className="border-t border-white/10 pt-4 text-gray-400 whitespace-pre-line text-sm italic">{geminiData.translated_lyrics}</div>
-                                                    </div>
-                                                )}
-                                            </>
+                                            view === 'chords' ? <div className="bg-white/5 p-4 rounded-lg font-mono text-xs text-yellow-200 whitespace-pre-wrap">{geminiData.chords}<hr className="my-4 border-white/10"/><div className="text-green-300">{geminiData.tabs}</div></div> :
+                                            <div className="space-y-6"><div className="text-gray-200 whitespace-pre-line text-sm">{geminiData.original_lyrics}</div><div className="border-t border-white/10 pt-4 text-gray-400 whitespace-pre-line text-sm italic">{geminiData.translated_lyrics}</div></div>
                                         )}
-                                        {!currentTrack && <p className="text-center text-gray-500 mt-10">Toque uma música primeiro</p>}
+                                        {!currentTrack && <p className="text-center text-gray-500">Selecione uma música</p>}
                                     </div>
-                                ) : (<div className="flex flex-col items-center justify-center h-64 text-white/50"><p>Selecione uma música.</p></div>)}
+                                ) : <p className="text-center text-gray-500 py-20">Selecione uma música</p>}
                             </div>
                         )}
                     </div>
@@ -540,132 +414,62 @@
                     {showFullScreenPlayer && currentTrack && (
                         <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in">
                             <div className="flex justify-between items-center p-6 bg-black">
-                                <button onClick={() => setShowFullScreenPlayer(false)} className="text-white opacity-80 hover:opacity-100"><Icons.ChevronDown width={32} /></button>
-                                <span className="text-xs uppercase tracking-widest text-gray-400">Tocando Agora</span>
-                                <button className="text-white opacity-80"><i className="fas fa-ellipsis-v text-xl"></i></button>
+                                <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
+                                <span className="text-xs tracking-widest text-gray-400">TOCANDO AGORA</span>
+                                <button><i className="fas fa-ellipsis-v text-xl"></i></button>
                             </div>
-
-                            <div className="flex-1 w-full bg-black flex flex-col items-center justify-center relative overflow-hidden">
-                                {sourceMode === 'youtube' ? (
-                                    <div className="w-full h-full flex flex-col items-center justify-center">
-                                        <iframe 
-                                            ref={youtubeRef}
-                                            className="w-full aspect-video max-h-[50vh] z-10"
-                                            src={getYoutubeUrl()} 
-                                            title="YouTube Video" 
-                                            frameBorder="0" 
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                            allowFullScreen
-                                        />
-                                        <div className="mt-4 z-20">
-                                            <p className="text-white/30 text-[10px] text-center mb-2">Vídeo indisponível? Clique abaixo:</p>
-                                            <a 
-                                                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(currentTrack.title + " " + currentTrack.artist)}`} 
-                                                target="_blank" 
-                                                className="flex items-center gap-2 bg-red-600/20 border border-red-600 text-red-500 px-4 py-2 rounded-full text-xs hover:bg-red-600 hover:text-white transition"
-                                            >
-                                                <Icons.ExternalLink width={14} /> Abrir no App YouTube
-                                            </a>
-                                        </div>
+                            
+                            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+                                <div className="relative w-72 h-72 md:w-96 md:h-96">
+                                    <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying && !audioLoading ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
+                                        <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
+                                        {audioLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full"><div className="loader"></div></div>}
                                     </div>
-                                ) : (
-                                    <div className="relative w-72 h-72 md:w-96 md:h-96">
-                                        <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
-                                            <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
-                                            <div className="absolute w-4 h-4 bg-white rounded-full"></div>
-                                            <div className="absolute w-1.5 h-1.5 bg-black rounded-full"></div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {!currentTrack.isLocal && (
-                                    <div className="absolute bottom-4 flex gap-2 z-30">
-                                        <button 
-                                            onClick={() => { setIsPlaying(false); setSourceMode('preview'); setTimeout(() => setIsPlaying(true), 100); }}
-                                            className={`px-4 py-2 text-xs rounded-full border ${sourceMode === 'preview' ? 'bg-white text-black border-white' : 'text-white/50 border-white/20'}`}
-                                        >
-                                            Preview (30s)
-                                        </button>
-                                        <button 
-                                            onClick={() => { setIsPlaying(false); setSourceMode('youtube'); setTimeout(() => setIsPlaying(true), 100); }}
-                                            className={`px-4 py-2 text-xs rounded-full border flex items-center gap-2 ${sourceMode === 'youtube' ? 'bg-red-600 text-white border-red-600' : 'text-white/50 border-white/20'}`}
-                                        >
-                                            <Icons.Youtube width={14} /> Completa (YouTube)
+                                </div>
+                                
+                                {!currentTrack.isLocal && BACKEND_URL && (
+                                    <div className="mt-8 flex gap-2 z-30">
+                                        <button onClick={() => setSourceMode('preview')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'preview' ? 'bg-white text-black' : 'border-white/30 text-white/50'}`}>Preview (30s)</button>
+                                        <button onClick={() => setSourceMode('full')} className={`text-[10px] px-3 py-1 rounded-full border flex items-center gap-2 ${sourceMode === 'full' ? 'bg-green-600 text-white border-green-600' : 'border-white/30 text-white/50'}`}>
+                                            <Icons.Server width={12} /> Completa (Server)
                                         </button>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="p-8 pb-12 space-y-6 bg-black">
+                            <div className="p-8 pb-12 space-y-6">
                                 <div className="flex justify-between items-end">
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-white mb-1">{currentTrack.title}</h2>
-                                        <p className={`text-lg ${theme.text}`}>{currentTrack.artist}</p>
-                                    </div>
-                                    <button onClick={() => toggleLike(currentTrack)} className="transform transition active:scale-125">
-                                        <Icons.Heart width={28} filled={isLiked} className={isLiked ? theme.text : "text-gray-400"} />
-                                    </button>
+                                    <div><h2 className="text-2xl font-bold mb-1">{currentTrack.title}</h2><p className={theme.text}>{currentTrack.artist}</p></div>
+                                    <button onClick={() => toggleLike(currentTrack)}><Icons.Heart width={28} filled={isLiked} className={isLiked ? theme.text : "text-gray-400"} /></button>
                                 </div>
 
-                                {/* BARRA DE PROGRESSO (NOVO) */}
-                                {sourceMode !== 'youtube' && (
-                                    <div className="w-full mt-4">
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max={duration || 0}
-                                            value={currentTime}
-                                            onChange={handleSeek}
-                                            className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
-                                            style={{accentColor: "white"}}
-                                        />
-                                        <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                            <span>{formatTime(currentTime)}</span>
-                                            <span>{formatTime(duration)}</span>
-                                        </div>
-                                    </div>
-                                )}
+                                <div className="w-full mt-4">
+                                    <input type="range" min="0" max={duration || 0} value={currentTime} onChange={handleSeek} className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer" style={{accentColor: "white"}} />
+                                    <div className="flex justify-between text-xs text-gray-500 mt-1"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                                </div>
 
                                 <div className="flex justify-between items-center px-4 mt-4">
-                                    <button className="text-gray-400 hover:text-white"><i className="fas fa-random text-xl"></i></button>
-                                    <button className="text-white hover:text-gray-300"><Icons.SkipBack width={32} /></button>
-                                    <button onClick={() => setIsPlaying(!isPlaying)} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
+                                    <button><Icons.SkipBack width={32} /></button>
+                                    <button onClick={() => setIsPlaying(!isPlaying)} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
                                         {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} className="ml-1" />}
                                     </button>
-                                    <button className="text-white hover:text-gray-300"><Icons.Skip width={32} /></button>
-                                    <button className="text-gray-400 hover:text-white"><i className="fas fa-redo text-xl"></i></button>
+                                    <button><Icons.Skip width={32} /></button>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {!showFullScreenPlayer && (
-                        <div className="fixed bottom-0 left-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
-                            {currentTrack && (
-                                <div className="flex items-center justify-between px-4 pb-3 border-b border-white/5 mb-2 cursor-pointer" onClick={() => setShowFullScreenPlayer(true)}>
-                                    <div className="flex items-center gap-3 overflow-hidden">
-                                        <img src={currentTrack.artwork} className="w-10 h-10 rounded" />
-                                        <div>
-                                            <p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p>
-                                            <p className="text-xs text-gray-500">{currentTrack.artist}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-4 items-center">
-                                         <button onClick={(e) => { e.stopPropagation(); toggleLike(currentTrack); }}><Icons.Heart width={20} filled={isLiked} className={isLiked ? theme.text : "text-gray-500"} /></button>
-                                         <button onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }} className="p-2 bg-white text-black rounded-full hover:scale-105 transition">
-                                            {isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}
-                                         </button>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="flex justify-around items-center pb-2">
-                                <NavButton icon={Icons.Home} label="Início" active={view === 'home'} onClick={() => setView('home')} color={theme.text} />
-                                <NavButton icon={Icons.Search} label="Buscar" active={view === 'search'} onClick={() => setView('search')} color={theme.text} />
-                                <button onClick={() => setView('chords')} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${view === 'chords' ? 'scale-110' : 'opacity-50 hover:opacity-100'}`}>
-                                    <div className={view === 'chords' ? theme.text : 'text-white'}><i className="fas fa-guitar text-xl"></i></div>
-                                    <span className={`text-[10px] font-bold ${view === 'chords' ? 'text-white' : 'text-transparent'}`}>Cifra</span>
-                                </button>
-                                <NavButton icon={Icons.ABC} label="Letra" active={view === 'lyrics'} onClick={() => setView('lyrics')} color={theme.text} />
+                        <div className="fixed bottom-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
+                            {currentTrack && <div className="flex justify-between px-4 pb-3 border-b border-white/5 mb-2 cursor-pointer" onClick={() => setShowFullScreenPlayer(true)}>
+                                <div className="flex gap-3"><img src={currentTrack.artwork} className="w-10 h-10 rounded" /><div><p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p><p className="text-xs text-gray-500">{currentTrack.artist}</p></div></div>
+                                <div className="flex gap-4 items-center"><button onClick={(e)=>{e.stopPropagation();toggleLike(currentTrack)}}><Icons.Heart width={20} filled={isLiked} className={isLiked ? theme.text : "text-gray-500"} /></button><button onClick={(e)=>{e.stopPropagation();setIsPlaying(!isPlaying)}}>{isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}</button></div>
+                            </div>}
+                            <div className="flex justify-around pb-2">
+                                <NavButton icon={Icons.Home} label="Início" active={view==='home'} onClick={()=>setView('home')} color={theme.text}/>
+                                <NavButton icon={Icons.Search} label="Buscar" active={view==='search'} onClick={()=>setView('search')} color={theme.text}/>
+                                <button onClick={()=>setView('chords')} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${view==='chords'?'scale-110':'opacity-50'}`}><div className={view==='chords'?theme.text:'text-white'}><i className="fas fa-guitar text-xl"></i></div><span className="text-[10px] font-bold">Cifra</span></button>
+                                <NavButton icon={Icons.ABC} label="Letra" active={view==='lyrics'} onClick={()=>setView('lyrics')} color={theme.text}/>
                             </div>
                         </div>
                     )}
@@ -673,11 +477,8 @@
             );
         }
 
-        const NavButton = ({ icon: Icon, label, active, onClick, color }) => (
-            <button onClick={onClick} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${active ? 'scale-110' : 'opacity-50 hover:opacity-100'}`}>
-                <div className={active ? color : 'text-white'}><Icon width={24} height={24} /></div>
-                <span className={`text-[10px] font-bold ${active ? 'text-white' : 'text-transparent'}`}>{label}</span>
-            </button>
+        const NavButton = ({icon:Icon, label, active, onClick, color}) => (
+            <button onClick={onClick} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${active?'scale-110':'opacity-50'}`}><div className={active?color:'text-white'}><Icon width={24} height={24}/></div><span className="text-[10px] font-bold">{label}</span></button>
         );
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
