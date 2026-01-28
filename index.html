@@ -1,20 +1,21 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
     <title>IronMusic AI - Player</title>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
+
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
+
     <!-- Firebase SDKs (RESTAURADOS) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -24,40 +25,108 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Fontes -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Oswald:wght@500;700&display=swap"
+        rel="stylesheet">
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #000; color: white; -webkit-tap-highlight-color: transparent; overflow: hidden; }
-        h1, h2, h3, .rock-font { font-family: 'Oswald', sans-serif; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            color: white;
+            -webkit-tap-highlight-color: transparent;
+            overflow: hidden;
+        }
+
+        h1,
+        h2,
+        h3,
+        .rock-font {
+            font-family: 'Oswald', sans-serif;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
         .gradient-spot {
-            position: absolute; top: -100px; left: -100px; width: 400px; height: 400px;
-            border-radius: 50%; filter: blur(80px); z-index: 0; opacity: 0.6; pointer-events: none;
+            position: absolute;
+            top: -100px;
+            left: -100px;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: 0;
+            opacity: 0.6;
+            pointer-events: none;
             transition: background 0.5s ease;
         }
-        .theme-yellow-spot { background: radial-gradient(circle, #854d0e 0%, transparent 70%); }
-        .theme-purple-spot { background: radial-gradient(circle, #581c87 0%, transparent 70%); }
-        .theme-green-spot  { background: radial-gradient(circle, #14532d 0%, transparent 70%); }
-        
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #fff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        .vinyl-spin { animation: spin 8s linear infinite; }
-        .vinyl-paused { animation-play-state: paused; }
-        
+        .theme-yellow-spot {
+            background: radial-gradient(circle, #854d0e 0%, transparent 70%);
+        }
+
+        .theme-purple-spot {
+            background: radial-gradient(circle, #581c87 0%, transparent 70%);
+        }
+
+        .theme-green-spot {
+            background: radial-gradient(circle, #14532d 0%, transparent 70%);
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .vinyl-spin {
+            animation: spin 8s linear infinite;
+        }
+
+        .vinyl-paused {
+            animation-play-state: paused;
+        }
+
         .vinyl-texture {
             background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px);
         }
 
         .toast {
-            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-            background: rgba(50, 50, 50, 0.9); color: white; padding: 10px 20px;
-            border-radius: 20px; font-size: 12px; z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(50, 50, 50, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
         }
-        .toast.show { opacity: 1; }
+
+        .toast.show {
+            opacity: 1;
+        }
     </style>
 </head>
+
 <body>
     <div id="root"></div>
 
@@ -65,8 +134,8 @@
         const { useState, useEffect, useRef } = React;
 
         // --- SUAS CHAVES ---
-        const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
-        const YOUTUBE_API_KEY = "AIzaSyDW4fEAz_MWn2q3jJZtZ0Iah-ylvkIzLGo"; 
+        const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A";
+        const YOUTUBE_API_KEY = "AIzaSyDW4fEAz_MWn2q3jJZtZ0Iah-ylvkIzLGo";
 
         // --- CONFIGURAÇÃO FIREBASE ---
         const firebaseConfig = {
@@ -108,43 +177,36 @@
 
         const Icons = {
             Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>,
-            Search: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
-            Play: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
-            Pause: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>,
-            Skip: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>,
-            SkipBack: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>,
-            Heart: ({ filled, ...p }) => <svg {...p} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>,
-            ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
+            Search: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>,
+            Play: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg>,
+            Pause: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>,
+            Skip: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" /></svg>,
+            SkipBack: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="19 20 9 12 19 4 19 20" /><line x1="5" y1="19" x2="5" y2="5" /></svg>,
+            Heart: ({ filled, ...p }) => <svg {...p} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>,
+            ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>,
             ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>,
-            Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-            ExternalLink: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
+            ExternalLink: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
         };
 
         function App() {
             // Inicializa na tela de busca para facilitar o teste
-            const [view, setView] = useState('search'); 
+            const [view, setView] = useState('search');
             const [activeTheme, setActiveTheme] = useState('yellow');
-            const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(true); 
+            const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(false);
             const [isPlaying, setIsPlaying] = useState(false);
             const [query, setQuery] = useState('');
             const [searchResults, setSearchResults] = useState([]);
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
-            
+
             // Estado para controlar se a API está quebrada (Cota excedida/Erro)
             const [isApiBroken, setIsApiBroken] = useState(false);
+            const [isFetchingId, setIsFetchingId] = useState(false);
 
-            const [sourceMode, setSourceMode] = useState('youtube'); 
-            
-            const [currentTrack, setCurrentTrack] = useState({
-                id: "fixed-test-lost",
-                title: "Lost",
-                artist: "Linkin Park",
-                artwork: "https://i.ytimg.com/vi/7NK_JOkuSVY/hqdefault.jpg",
-                isLocal: false,
-                previewUrl: "", 
-                youtubeId: "7NK_JOkuSVY" // Inicializa com o fixo
-            });
+            const [sourceMode, setSourceMode] = useState('youtube');
+
+            const [currentTrack, setCurrentTrack] = useState(null);
 
             const [geminiData, setGeminiData] = useState(null);
             const [isGeminiLoading, setIsGeminiLoading] = useState(false);
@@ -192,19 +254,19 @@
                 const q = encodeURIComponent(`${title} ${artist} official video`);
                 try {
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&videoEmbeddable=true&maxResults=1&key=${YOUTUBE_API_KEY}`);
-                    
+
                     if (!res.ok) {
                         console.warn(`YouTube API Error ${res.status}. Switching to fallback mode.`);
                         setIsApiBroken(true);
-                        return null; 
+                        return null;
                     }
 
                     const data = await res.json();
                     if (data.items && data.items.length > 0) {
                         const newId = data.items[0].id.videoId;
-                        
+
                         // 4. SALVA NO CACHE PARA O FUTURO
-                        
+
                         // Salva no Firebase (se ativo)
                         if (isFirebaseActive && db) {
                             db.collection('song_cache').doc(cacheKey).set({
@@ -219,12 +281,12 @@
                         // Salva no LocalStorage (sempre bom ter backup local)
                         try {
                             localStorage.setItem(cacheKey, newId);
-                        } catch(e){}
+                        } catch (e) { }
 
                         return newId;
                     }
-                } catch(e) { 
-                    console.warn("Erro YT API", e); 
+                } catch (e) {
+                    console.warn("Erro YT API", e);
                     setIsApiBroken(true);
                 }
                 return null;
@@ -232,51 +294,39 @@
 
             // --- LÓGICA DE PLAYER ---
             useEffect(() => {
-                const manageAudio = async () => {
-                    if (!currentTrack) return;
+                if (!currentTrack) return;
 
-                    // Pause native audio
-                    audioRef.current.pause();
+                // Pause native audio sempre
+                audioRef.current.pause();
 
-                    if (currentTrack.isLocal) {
-                        setSourceMode('local');
-                        audioRef.current.src = currentTrack.previewUrl;
-                        if(isPlaying) audioRef.current.play().catch(()=>{});
-                        return;
-                    }
+                if (currentTrack.isLocal) {
+                    setSourceMode('local');
+                    audioRef.current.src = currentTrack.previewUrl;
+                    if (isPlaying) audioRef.current.play().catch(() => { });
+                    return;
+                }
 
-                    // Se não temos ID, busca agora
-                    if (!currentTrack.youtubeId) { 
-                        // Tenta buscar o ID exato (Cache -> API -> Cache)
-                        const vid = await fetchYoutubeId(currentTrack.title, currentTrack.artist);
-                        
-                        if (vid) {
-                            // Se achou, usa o ID
-                            setCurrentTrack(prev => ({ ...prev, youtubeId: vid }));
-                        } else {
-                            // Se NÃO achou ou deu erro (API quebrada), usa busca fallback
-                            setCurrentTrack(prev => ({ ...prev, youtubeId: 'SEARCH_FALLBACK' }));
-                        }
-                        return; 
-                    }
-
+                // Se temos ID do YouTube, configura o modo
+                if (currentTrack.youtubeId) {
                     setSourceMode('youtube');
                     // Comanda o Iframe se já existir
-                    if(youtubeRef.current && youtubeRef.current.contentWindow) {
+                    if (youtubeRef.current && youtubeRef.current.contentWindow) {
                         const cmd = isPlaying ? 'playVideo' : 'pauseVideo';
-                        try { youtubeRef.current.contentWindow.postMessage(JSON.stringify({'event': 'command', 'func': cmd}), '*'); } catch(e){}
+                        try {
+                            youtubeRef.current.contentWindow.postMessage(
+                                JSON.stringify({ 'event': 'command', 'func': cmd }), '*'
+                            );
+                        } catch (e) { }
                     }
-                };
-
-                manageAudio();
+                }
             }, [currentTrack, isPlaying]);
 
             const getYoutubeEmbed = () => {
                 if (!currentTrack || !currentTrack.youtubeId) return '';
-                
+
                 const isSecureOrigin = window.location.protocol.startsWith('http');
                 let params = `autoplay=1&playsinline=1&rel=0&iv_load_policy=3`;
-                
+
                 if (isSecureOrigin) {
                     params += `&enablejsapi=1&origin=${window.location.origin}`;
                 }
@@ -294,29 +344,46 @@
                 setIsGeminiLoading(true); setGeminiData(null);
                 try {
                     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                        method: "POST", headers: {"Content-Type": "application/json"},
+                        method: "POST", headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ contents: [{ parts: [{ text: `JSON lyrics, translation, chords, tabs for "${t.title}" - "${t.artist}"` }] }] })
                     });
                     const d = await r.json();
                     setGeminiData(JSON.parse(d.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim()));
-                } catch(e){} finally { setIsGeminiLoading(false); }
+                } catch (e) { } finally { setIsGeminiLoading(false); }
             };
 
             useEffect(() => { if ((view === 'lyrics' || view === 'chords') && currentTrack && !geminiData) fetchGemini(currentTrack); }, [view, currentTrack]);
 
-            const handlePlay = (t) => {
+            const handlePlay = async (t) => {
+                // Se for a mesma música, apenas abre o player
                 if (currentTrack?.title === t.title) {
                     setShowFullScreenPlayer(true);
-                } else {
-                    setCurrentTrack({...t, youtubeId: null}); // Reseta o ID para buscar no cache ou API
-                    setIsPlaying(true);
-                    setGeminiData(null);
-                    setShowFullScreenPlayer(true);
+                    return;
                 }
+
+                // Mostra o player imediatamente
+                setShowFullScreenPlayer(true);
+                setGeminiData(null);
+                setIsFetchingId(true);
+
+                // Configura música temporariamente SEM o ID
+                setCurrentTrack({ ...t, youtubeId: null });
+
+                // Busca o ID do YouTube (cache ou API) de forma assíncrona
+                const youtubeId = await fetchYoutubeId(t.title, t.artist);
+
+                // Atualiza com o ID encontrado (ou fallback se não encontrou)
+                setCurrentTrack(prev => ({
+                    ...prev,
+                    youtubeId: youtubeId || 'SEARCH_FALLBACK'
+                }));
+
+                setIsFetchingId(false);
+                setIsPlaying(true);
             };
 
             const handleFileUpload = (e) => {
-                const f = e.target.files[0]; if(!f) return;
+                const f = e.target.files[0]; if (!f) return;
                 handlePlay({ id: Date.now(), title: f.name.replace(/\.[^/.]+$/, ""), artist: "Local", artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3", previewUrl: URL.createObjectURL(f), isLocal: true });
                 showToast("Arquivo carregado!");
             };
@@ -331,10 +398,10 @@
                         artwork: i.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'),
                         previewUrl: i.previewUrl
                     })));
-                } catch(e) { showToast("Erro na busca do iTunes."); } finally { setLoading(false); }
+                } catch (e) { showToast("Erro na busca do iTunes."); } finally { setLoading(false); }
             };
 
-            const theme = activeTheme === 'purple' ? {spot:'theme-purple-spot', text:'text-purple-500'} : activeTheme === 'green' ? {spot:'theme-green-spot', text:'text-green-500'} : {spot:'theme-yellow-spot', text:'text-yellow-500'};
+            const theme = activeTheme === 'purple' ? { spot: 'theme-purple-spot', text: 'text-purple-500' } : activeTheme === 'green' ? { spot: 'theme-green-spot', text: 'text-green-500' } : { spot: 'theme-yellow-spot', text: 'text-yellow-500' };
 
             return (
                 <div className="h-screen w-full flex flex-col relative">
@@ -352,7 +419,7 @@
                         {view === 'home' && (
                             <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
                                 <p className="text-gray-400">Para testar, vá para a aba Buscar.</p>
-                                <button onClick={()=>setView('search')} className={`bg-white/10 px-6 py-3 rounded-full font-bold ${theme.text}`}>Ir para Busca</button>
+                                <button onClick={() => setView('search')} className={`bg-white/10 px-6 py-3 rounded-full font-bold ${theme.text}`}>Ir para Busca</button>
                             </div>
                         )}
 
@@ -367,12 +434,12 @@
                                 <div className="space-y-2">
                                     {searchResults.length === 0 && !loading && query && <p className="text-center text-gray-500 text-sm">Pressione Enter ou clique em Buscar</p>}
                                     {searchResults.map(t => (
-                                    <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer border border-transparent hover:border-white/10 transition">
-                                        <img src={t.artwork} className="w-12 h-12 rounded" />
-                                        <div className="flex-1 overflow-hidden"><p className={`font-bold truncate ${currentTrack?.title === t.title ? theme.text : ''}`}>{t.title}</p><p className="text-xs text-gray-500">{t.artist}</p></div>
-                                        <Icons.Play width={16} className="text-white/50" />
-                                    </div>
-                                ))}</div>
+                                        <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer border border-transparent hover:border-white/10 transition">
+                                            <img src={t.artwork} className="w-12 h-12 rounded" />
+                                            <div className="flex-1 overflow-hidden"><p className={`font-bold truncate ${currentTrack?.title === t.title ? theme.text : ''}`}>{t.title}</p><p className="text-xs text-gray-500">{t.artist}</p></div>
+                                            <Icons.Play width={16} className="text-white/50" />
+                                        </div>
+                                    ))}</div>
                             </div>
                         )}
 
@@ -383,8 +450,8 @@
                                         <div className="flex gap-4 border-b border-white/10 pb-4"><img src={currentTrack.artwork} className="w-16 h-16 rounded shadow-lg" /><div><h2 className="text-xl font-bold">{currentTrack.title}</h2><p className="text-xs text-gray-500">{currentTrack.artist}</p></div></div>
                                         {isGeminiLoading && <div className="loader mx-auto"></div>}
                                         {!isGeminiLoading && geminiData && (
-                                            view === 'chords' ? <div className="bg-white/5 p-4 rounded-lg font-mono text-xs text-yellow-200 whitespace-pre-wrap">{geminiData.chords}<hr className="my-4 border-white/10"/><div className="text-green-300">{geminiData.tabs}</div></div> :
-                                            <div className="space-y-6"><div className="text-gray-200 whitespace-pre-line text-sm">{geminiData.original_lyrics}</div><div className="border-t border-white/10 pt-4 text-gray-400 whitespace-pre-line text-sm italic">{geminiData.translated_lyrics}</div></div>
+                                            view === 'chords' ? <div className="bg-white/5 p-4 rounded-lg font-mono text-xs text-yellow-200 whitespace-pre-wrap">{geminiData.chords}<hr className="my-4 border-white/10" /><div className="text-green-300">{geminiData.tabs}</div></div> :
+                                                <div className="space-y-6"><div className="text-gray-200 whitespace-pre-line text-sm">{geminiData.original_lyrics}</div><div className="border-t border-white/10 pt-4 text-gray-400 whitespace-pre-line text-sm italic">{geminiData.translated_lyrics}</div></div>
                                         )}
                                         {!currentTrack && <p className="text-center text-gray-500">Selecione uma música</p>}
                                     </div>
@@ -400,19 +467,19 @@
                                 <span className="text-xs tracking-widest text-gray-400">TOCANDO AGORA</span>
                                 <button><i className="fas fa-ellipsis-v text-xl"></i></button>
                             </div>
-                            
+
                             <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
                                 {sourceMode === 'youtube' && currentTrack.youtubeId ? (
                                     <div className="w-full flex flex-col items-center justify-center">
                                         {/* Container forçando 16:9 */}
                                         <div className="w-full aspect-video z-10 bg-black shadow-lg relative">
-                                            <iframe 
+                                            <iframe
                                                 ref={youtubeRef}
                                                 className="absolute inset-0 w-full h-full"
-                                                src={getYoutubeEmbed()} 
-                                                title="YouTube Video" 
-                                                frameBorder="0" 
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                                src={getYoutubeEmbed()}
+                                                title="YouTube Video"
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                                 allowFullScreen
                                             />
                                         </div>
@@ -451,13 +518,13 @@
                         <div className="fixed bottom-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
                             {currentTrack && <div className="flex justify-between px-4 pb-3 border-b border-white/5 mb-2 cursor-pointer" onClick={() => setShowFullScreenPlayer(true)}>
                                 <div className="flex gap-3"><img src={currentTrack.artwork} className="w-10 h-10 rounded" /><div><p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p><p className="text-xs text-gray-500">{currentTrack.artist}</p></div></div>
-                                <div className="flex gap-4 items-center"><button onClick={(e)=>{e.stopPropagation();setIsPlaying(!isPlaying)}}>{isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}</button></div>
+                                <div className="flex gap-4 items-center"><button onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying) }}>{isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}</button></div>
                             </div>}
                             <div className="flex justify-around pb-2">
-                                <NavButton icon={Icons.Home} label="Início" active={view==='home'} onClick={()=>setView('home')} color={theme.text}/>
-                                <NavButton icon={Icons.Search} label="Buscar" active={view==='search'} onClick={()=>setView('search')} color={theme.text}/>
-                                <button onClick={()=>setView('chords')} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${view==='chords'?'scale-110':'opacity-50'}`}><div className={view==='chords'?theme.text:'text-white'}><i className="fas fa-guitar text-xl"></i></div><span className="text-[10px] font-bold">Cifra</span></button>
-                                <NavButton icon={Icons.ABC} label="Letra" active={view==='lyrics'} onClick={()=>setView('lyrics')} color={theme.text}/>
+                                <NavButton icon={Icons.Home} label="Início" active={view === 'home'} onClick={() => setView('home')} color={theme.text} />
+                                <NavButton icon={Icons.Search} label="Buscar" active={view === 'search'} onClick={() => setView('search')} color={theme.text} />
+                                <button onClick={() => setView('chords')} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${view === 'chords' ? 'scale-110' : 'opacity-50'}`}><div className={view === 'chords' ? theme.text : 'text-white'}><i className="fas fa-guitar text-xl"></i></div><span className="text-[10px] font-bold">Cifra</span></button>
+                                <NavButton icon={Icons.ABC} label="Letra" active={view === 'lyrics'} onClick={() => setView('lyrics')} color={theme.text} />
                             </div>
                         </div>
                     )}
@@ -465,12 +532,13 @@
             );
         }
 
-        const NavButton = ({icon:Icon, label, active, onClick, color}) => (
-            <button onClick={onClick} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${active?'scale-110':'opacity-50'}`}><div className={active?color:'text-white'}><Icon width={24} height={24}/></div><span className="text-[10px] font-bold">{label}</span></button>
+        const NavButton = ({ icon: Icon, label, active, onClick, color }) => (
+            <button onClick={onClick} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${active ? 'scale-110' : 'opacity-50'}`}><div className={active ? color : 'text-white'}><Icon width={24} height={24} /></div><span className="text-[10px] font-bold">{label}</span></button>
         );
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
+
 </html>
