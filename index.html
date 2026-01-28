@@ -266,10 +266,9 @@
 
                 if (vid) {
                     setSourceMode('youtube');
-                    if (ytPlayer && ytPlayer.loadVideoById) {
-                        ytPlayer.loadVideoById(vid);
-                        // Pequeno delay para garantir carregamento
-                        setTimeout(() => ytPlayer.playVideo(), 500);
+                    if (ytPlayer && ytPlayer.loadVideoByUrl) {
+                        // USANDO URL COMPLETA COM WATCH?V= COMO SOLICITADO
+                        ytPlayer.loadVideoByUrl(`https://www.youtube.com/watch?v=${vid}`);
                     }
                 } else {
                     showToast("Áudio não encontrado. Usando Preview.");
@@ -325,11 +324,9 @@
                 setHistory(h); localStorage.setItem('iron_history', JSON.stringify(h));
             }
             const toggleLike = (t) => {
-                // Implementação simples de toggle local/cloud
                 const exists = likedSongs.find(s => s.title === t.title);
                 const newFavs = exists ? likedSongs.filter(s => s.title !== t.title) : [...likedSongs, t];
                 setLikedSongs(newFavs); localStorage.setItem('iron_liked', JSON.stringify(newFavs));
-                // Opcional: Sync com Firebase se disponível (complexo sincronizar delete sem ID, mantendo simples)
                 if(db && !useLocalStorage && !isFirebaseDisabled && !exists) db.collection('favorites').add(t).catch(()=>{});
             }
 
