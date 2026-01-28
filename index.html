@@ -60,6 +60,24 @@
         .vinyl-texture {
             background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px);
         }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(50, 50, 50, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
     </style>
 </head>
 <body>
@@ -82,19 +100,13 @@
 
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
         
-        // SEU SERVIDOR NOVO:
-        const BACKEND_URL = "https://ironmusic-api.onrender.com"; 
-
         // Inicialização Firebase Segura e Seletiva
         let db = null;
         let auth = null;
         let isFirebaseDisabled = false;
 
-        // DETECÇÃO DE PROJETO SUSPENSO:
-        // Se o ID do projeto for o que sabemos estar suspenso, forçamos modo offline direto.
         if (firebaseConfig.projectId === "ironmusic-727bb") {
-            console.log("Projeto Firebase detectado como suspenso. Ativando Modo Offline Permanente.");
-            isFirebaseDisabled = true;
+            isFirebaseDisabled = true; // Força offline se o projeto estiver suspenso
         } else {
             try {
                 if (typeof firebase !== 'undefined' && firebase.apps.length === 0) {
@@ -123,7 +135,8 @@
             ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
             ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>,
             Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-            Server: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+            Youtube: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>,
+            ExternalLink: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         };
 
         function App() {
@@ -137,21 +150,26 @@
             const [query, setQuery] = useState('');
             const [searchResults, setSearchResults] = useState([]);
             const [loading, setLoading] = useState(false);
+            const [toastMsg, setToastMsg] = useState('');
             
-            // source: 'preview' (iTunes) | 'full' (Seu Servidor) | 'local' (Arquivo)
-            const [sourceMode, setSourceMode] = useState(BACKEND_URL ? 'full' : 'preview'); 
+            // source: 'preview' (iTunes) | 'youtube' (Iframe) | 'local' (Arquivo)
+            const [sourceMode, setSourceMode] = useState('preview'); 
 
-            // Se isFirebaseDisabled for true (por causa do erro de conta suspensa), 
-            // setamos useLocalStorage como true imediatamente.
             const [useLocalStorage, setUseLocalStorage] = useState(isFirebaseDisabled);
-            
             const [geminiData, setGeminiData] = useState(null);
             const [isGeminiLoading, setIsGeminiLoading] = useState(false);
 
             const audioRef = useRef(new Audio());
+            const youtubeRef = useRef(null);
             const fileInputRef = useRef(null);
 
-            // Login Anônimo (Apenas se Firebase não estiver desativado)
+            // Toast Helper
+            const showToast = (msg) => {
+                setToastMsg(msg);
+                setTimeout(() => setToastMsg(''), 3000);
+            };
+
+            // Login Anônimo
             useEffect(() => {
                 if (!isFirebaseDisabled && auth) {
                     auth.signInAnonymously().catch(e => {
@@ -167,7 +185,6 @@
                     try { const data = localStorage.getItem(key); if (data) setter(JSON.parse(data)); } catch(e) {}
                 };
                 
-                // Se Firebase estiver desativado ou ocorrer erro, usa apenas local
                 if (!isFirebaseDisabled && db && !useLocalStorage) {
                     try {
                         const u1 = db.collection('favorites').onSnapshot(
@@ -192,13 +209,10 @@
 
             const toggleLike = (track) => {
                 const alreadyLiked = likedSongs.find(s => s.title === track.title);
-                
-                // Salvar localmente primeiro para resposta instantânea
                 let newFavs = alreadyLiked ? likedSongs.filter(s => s.title !== track.title) : [...likedSongs, track];
                 setLikedSongs(newFavs);
                 localStorage.setItem('iron_likedSongs', JSON.stringify(newFavs));
 
-                // Se Firebase estiver disponível, tenta sincronizar silenciosamente
                 if (!useLocalStorage && !isFirebaseDisabled && db) {
                     if (alreadyLiked) db.collection('favorites').doc(alreadyLiked.id).delete().catch(()=>{});
                     else db.collection('favorites').add(track).catch(()=>{});
@@ -206,61 +220,53 @@
             };
 
             const addToHistory = (track) => {
-                // Salvar localmente
                 const newHistory = [track, ...history].slice(0, 10);
                 setHistory(newHistory);
                 localStorage.setItem('iron_history', JSON.stringify(newHistory));
 
-                // Tenta sincronizar
                 if (!useLocalStorage && !isFirebaseDisabled && db) {
                     db.collection('history').add({ ...track, addedAt: new Date().toISOString() }).catch(()=>{});
                 }
             };
 
-            // --- LÓGICA DE ÁUDIO ---
+            // --- LÓGICA DE ÁUDIO HÍBRIDO ---
             useEffect(() => {
                 if (!currentTrack) return;
                 
-                // Constrói a URL dependendo do modo
-                let audioSrc = "";
-                
-                if (currentTrack.isLocal) {
-                    audioSrc = currentTrack.previewUrl;
-                } else if (sourceMode === 'preview') {
-                    audioSrc = currentTrack.previewUrl;
-                } else if (sourceMode === 'full' && BACKEND_URL) {
-                    // Mágica do Servidor: Manda o link do youtube, recebe o audio
-                    // Usamos uma busca simples pelo backend
-                    const query = encodeURIComponent(currentTrack.title + " " + currentTrack.artist + " audio");
-                    // A URL aqui depende de como você configurou o server.js
-                    // Se você usou o código que te passei com rota '/stream?url=...', precisamos achar o link primeiro.
-                    // Para facilitar, vamos assumir que o backend pode não ter busca interna.
-                    // Se o backend só aceita URL do youtube, o front teria que buscar o ID primeiro.
-                    // **CORREÇÃO PARA O SEU BACKEND**: O código server.js que passei espera "?url=LINK".
-                    // Como não temos o link exato, vamos tentar um truque ou voltar pro preview se falhar.
-                    // Se você quiser busca automática, o backend precisaria de uma lib de busca (ytsr).
-                    // POR ENQUANTO, para garantir funcionamento, se não tiver link direto, usamos preview.
-                    // *Se você melhorar o backend depois para aceitar busca, altere aqui.*
+                // Resetar players quando muda a fonte ou musica
+                if (sourceMode === 'youtube') {
+                    // Parar áudio HTML5 se estiver tocando
+                    audioRef.current.pause();
                     
-                    // Como seu backend atual espera URL exata e não temos, vou manter o modo preview como padrão seguro 
-                    // a menos que seja arquivo local. 
-                    // Se você quiser testar com um link fixo para ver se funciona:
-                    // audioSrc = `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=dQw4w9WgXcQ`; // Teste
-                    
-                    // Voltando para preview por segurança já que o backend precisa de URL exata
-                    console.log("Backend configurado, mas requer URL exata. Usando preview.");
-                    audioSrc = currentTrack.previewUrl; 
-                }
-
-                // Troca o áudio se necessário
-                if (audioRef.current.src !== audioSrc && audioSrc) {
-                    audioRef.current.src = audioSrc;
-                    if (isPlaying) audioRef.current.play().catch(e => console.log("Play error (expected on mobile without gesture):", e));
+                    // Controlar YouTube via postMessage
+                    if(youtubeRef.current && youtubeRef.current.contentWindow) {
+                        const command = isPlaying ? 'playVideo' : 'pauseVideo';
+                        // Pequeno delay para garantir que o iframe está pronto e carregado
+                        setTimeout(() => {
+                            try { youtubeRef.current.contentWindow.postMessage(JSON.stringify({'event': 'command', 'func': command}), '*'); } catch(e){}
+                        }, 500);
+                    }
                 } else {
-                    if (isPlaying) audioRef.current.play().catch(e => {});
-                    else audioRef.current.pause();
+                    // Modo Preview/Local
+                    // Tenta pausar o YouTube
+                    if(youtubeRef.current && youtubeRef.current.contentWindow) {
+                        try { youtubeRef.current.contentWindow.postMessage(JSON.stringify({'event': 'command', 'func': 'pauseVideo'}), '*'); } catch(e){}
+                    }
+                    
+                    // Configurar source do Audio HTML5
+                    if (audioRef.current.src !== currentTrack.previewUrl) {
+                        audioRef.current.src = currentTrack.previewUrl;
+                    }
+                    
+                    if (isPlaying) {
+                        audioRef.current.play().catch(e => {
+                            console.log("Autoplay bloqueado pelo navegador", e);
+                            setIsPlaying(false);
+                        });
+                    } else {
+                        audioRef.current.pause();
+                    }
                 }
-
             }, [currentTrack, isPlaying, sourceMode]);
 
             useEffect(() => {
@@ -294,6 +300,7 @@
                 if (currentTrack?.title === track.title) {
                     setShowFullScreenPlayer(true);
                 } else {
+                    // Resetar para Preview sempre que mudar de música (mais seguro)
                     setSourceMode(track.isLocal ? 'local' : 'preview'); 
                     setCurrentTrack(track);
                     setIsPlaying(true);
@@ -316,6 +323,7 @@
                     isLocal: true
                 };
                 handlePlay(localTrack);
+                showToast("Arquivo local carregado!");
             };
 
             const searchMusic = async () => {
@@ -331,7 +339,16 @@
                         artwork: item.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'),
                         previewUrl: item.previewUrl
                     })));
-                } catch (e) { alert("Erro na busca."); } finally { setLoading(false); }
+                } catch (e) { showToast("Erro na busca."); } finally { setLoading(false); }
+            };
+
+            // URL YouTube Segura com busca por Lyrics
+            const getYoutubeUrl = () => {
+                if (!currentTrack) return '';
+                const term = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist} lyrics`);
+                const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
+                // enablejsapi=1 é crucial
+                return `https://www.youtube.com/embed?listType=search&list=${term}&autoplay=1&playsinline=1&rel=0&enablejsapi=1${origin}`;
             };
 
             const getThemeData = () => {
@@ -347,6 +364,8 @@
             return (
                 <div className="h-screen w-full flex flex-col relative">
                     <div className={`gradient-spot ${theme.spot}`}></div>
+                    
+                    <div className={`toast ${toastMsg ? 'show' : ''}`}>{toastMsg}</div>
 
                     <div className="flex justify-between items-center p-4 pt-8 bg-transparent z-20 relative">
                         <div className="flex items-center gap-2">
@@ -479,21 +498,54 @@
                                 <button className="text-white opacity-80"><i className="fas fa-ellipsis-v text-xl"></i></button>
                             </div>
 
-                            {/* VINIL GIRATÓRIO (MODO ITUNES) */}
-                            <div className="flex-1 flex items-center justify-center relative overflow-hidden">
-                                <div className="relative w-72 h-72 md:w-96 md:h-96">
-                                    <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
-                                        <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
-                                        <div className="absolute w-4 h-4 bg-white rounded-full"></div>
-                                        <div className="absolute w-1.5 h-1.5 bg-black rounded-full"></div>
+                            {/* ÁREA DO PLAYER (HÍBRIDA) */}
+                            <div className="flex-1 w-full bg-black flex flex-col items-center justify-center relative overflow-hidden">
+                                {sourceMode === 'youtube' ? (
+                                    <div className="w-full h-full flex flex-col items-center justify-center">
+                                        <iframe 
+                                            ref={youtubeRef}
+                                            className="w-full aspect-video max-h-[50vh] z-10"
+                                            src={getYoutubeUrl()} 
+                                            title="YouTube Video" 
+                                            frameBorder="0" 
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                            allowFullScreen
+                                        />
+                                        <div className="mt-4 z-20">
+                                            <p className="text-white/30 text-[10px] text-center mb-2">Vídeo indisponível? Clique abaixo:</p>
+                                            <a 
+                                                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(currentTrack.title + " " + currentTrack.artist)}`} 
+                                                target="_blank" 
+                                                className="flex items-center gap-2 bg-red-600/20 border border-red-600 text-red-500 px-4 py-2 rounded-full text-xs hover:bg-red-600 hover:text-white transition"
+                                            >
+                                                <Icons.ExternalLink width={14} /> Abrir no App YouTube
+                                            </a>
+                                        </div>
                                     </div>
-                                </div>
-                                
-                                {!currentTrack.isLocal && BACKEND_URL && (
-                                    <div className="absolute bottom-4 flex gap-2">
-                                        <button onClick={() => setSourceMode('preview')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'preview' ? 'bg-white text-black' : 'border-white/30 text-white/50'}`}>Preview (30s)</button>
-                                        <button onClick={() => setSourceMode('full')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'full' ? 'bg-green-600 text-white border-green-600' : 'border-white/30 text-white/50'}`}>
-                                            Completa (Server)
+                                ) : (
+                                    <div className="relative w-72 h-72 md:w-96 md:h-96">
+                                        <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
+                                            <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
+                                            <div className="absolute w-4 h-4 bg-white rounded-full"></div>
+                                            <div className="absolute w-1.5 h-1.5 bg-black rounded-full"></div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* SELETOR DE FONTE DE ÁUDIO */}
+                                {!currentTrack.isLocal && (
+                                    <div className="absolute bottom-4 flex gap-2 z-30">
+                                        <button 
+                                            onClick={() => { setIsPlaying(false); setSourceMode('preview'); setTimeout(() => setIsPlaying(true), 100); }}
+                                            className={`px-4 py-2 text-xs rounded-full border ${sourceMode === 'preview' ? 'bg-white text-black border-white' : 'text-white/50 border-white/20'}`}
+                                        >
+                                            Preview (30s)
+                                        </button>
+                                        <button 
+                                            onClick={() => { setIsPlaying(false); setSourceMode('youtube'); setTimeout(() => setIsPlaying(true), 100); }}
+                                            className={`px-4 py-2 text-xs rounded-full border flex items-center gap-2 ${sourceMode === 'youtube' ? 'bg-red-600 text-white border-red-600' : 'text-white/50 border-white/20'}`}
+                                        >
+                                            <Icons.Youtube width={14} /> Completa (YouTube)
                                         </button>
                                     </div>
                                 )}
@@ -531,7 +583,7 @@
                                         <img src={currentTrack.artwork} className="w-10 h-10 rounded" />
                                         <div>
                                             <p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p>
-                                            <p className="text-xs text-gray-400 truncate">{currentTrack.artist}</p>
+                                            <p className="text-xs text-gray-500">{currentTrack.artist}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 items-center">
