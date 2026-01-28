@@ -169,6 +169,7 @@
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
             
+            // source: 'preview' (iTunes) | 'full' (Server) | 'local' (Arquivo)
             const [sourceMode, setSourceMode] = useState(BACKEND_URL ? 'full' : 'preview'); 
             const [audioLoading, setAudioLoading] = useState(false);
 
@@ -235,10 +236,13 @@
             // --- FUNÇÃO PARA PEGAR URL DO SERVER ---
             const getAudioLink = async (title, artist) => {
                 const search = encodeURIComponent(`${title} ${artist} lyrics`);
+                // Lista ROTATIVA de APIs públicas para garantir que ache o vídeo
                 const apis = [
                     `https://pipedapi.kavin.rocks/search?q=${search}&filter=music_songs`,
-                    `https://invidious.drgns.space/api/v1/search?q=${search}&type=video`,
-                    `https://vid.uff.email/api/v1/search?q=${search}&type=video`
+                    `https://invidious.privacydev.net/api/v1/search?q=${search}&type=video`,
+                    `https://vid.uff.email/api/v1/search?q=${search}&type=video`,
+                    `https://invidious.protokolla.fi/api/v1/search?q=${search}&type=video`,
+                    `https://ytapi.srv.us.kg/search?q=${search}`
                 ];
 
                 for (const api of apis) {
@@ -248,19 +252,21 @@
                         const data = await res.json();
                         let videoId = null;
                         
-                        // Adaptação para diferentes formatos de API (Piped vs Invidious)
+                        // Tenta extrair ID de diferentes formatos de API
                         if (api.includes('piped') && data.items && data.items.length > 0) {
                             videoId = data.items[0].url.split('v=')[1];
                         } else if (data && data.length > 0 && data[0].videoId) {
                             videoId = data[0].videoId;
+                        } else if (data && data.items && data.items.length > 0 && data.items[0].id) {
+                             videoId = data.items[0].id.videoId || data.items[0].id;
                         }
 
                         if (videoId) {
+                            console.log("Encontrado ID:", videoId, "na API:", api);
                             return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
                         }
                     } catch (e) {
-                        console.warn(`Erro na API ${api}:`, e);
-                        continue; // Tenta a próxima API
+                        continue; 
                     }
                 }
                 return null;
@@ -272,25 +278,22 @@
 
                 const loadAndPlay = async () => {
                     let src = "";
-                    setAudioLoading(true); // Começa carregando
+                    setAudioLoading(true); 
                     
                     if (currentTrack.isLocal) {
                         src = currentTrack.previewUrl;
                         setAudioLoading(false);
                     } else if (sourceMode === 'full' && BACKEND_URL) {
-                        // TENTA O SERVIDOR PRIMEIRO
                         const serverLink = await getAudioLink(currentTrack.title, currentTrack.artist);
                         if (serverLink) {
                             src = serverLink;
                         } else {
-                            // Se falhar o servidor, avisa e usa preview
-                            showToast("Servidor ocupado. Usando preview.");
-                            setSourceMode('preview'); // Fallback
+                            showToast("Busca falhou. Usando preview.");
+                            setSourceMode('preview'); 
                             src = currentTrack.previewUrl;
                             setAudioLoading(false);
                         }
                     } else {
-                        // MODO PREVIEW
                         src = currentTrack.previewUrl;
                         setAudioLoading(false);
                     }
@@ -339,7 +342,6 @@
                 if (currentTrack?.title === t.title) {
                     setShowFullScreenPlayer(true);
                 } else {
-                    // MUDANÇA: AGORA O PADRÃO É 'FULL' (SERVIDOR)
                     setSourceMode((BACKEND_URL && !t.isLocal) ? 'full' : 'preview'); 
                     setCurrentTrack(t); 
                     setIsPlaying(true); 
