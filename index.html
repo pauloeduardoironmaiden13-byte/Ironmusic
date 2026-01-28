@@ -61,6 +61,29 @@
             background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px);
         }
 
+        /* Range Slider Customizado */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -4px; 
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #4b5563;
+            border-radius: 2px;
+        }
+
         /* Toast Notification */
         .toast {
             position: fixed;
@@ -100,16 +123,15 @@
 
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
         
-        // SEU SERVIDOR NOVO:
         const BACKEND_URL = "https://ironmusic-api.onrender.com"; 
 
-        // Inicialização Firebase Segura e Seletiva
+        // Inicialização Firebase
         let db = null;
         let auth = null;
         let isFirebaseDisabled = false;
 
         if (firebaseConfig.projectId === "ironmusic-727bb") {
-            isFirebaseDisabled = true; // Força offline se o projeto estiver suspenso
+            isFirebaseDisabled = true;
         } else {
             try {
                 if (typeof firebase !== 'undefined' && firebase.apps.length === 0) {
@@ -155,8 +177,11 @@
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
             
-            // source: 'preview' (iTunes) | 'youtube' (Iframe) | 'local' (Arquivo)
             const [sourceMode, setSourceMode] = useState('preview'); 
+
+            // Estados de Tempo da Música
+            const [currentTime, setCurrentTime] = useState(0);
+            const [duration, setDuration] = useState(0);
 
             const [useLocalStorage, setUseLocalStorage] = useState(isFirebaseDisabled);
             const [geminiData, setGeminiData] = useState(null);
@@ -166,7 +191,6 @@
             const youtubeRef = useRef(null);
             const fileInputRef = useRef(null);
 
-            // Toast Helper
             const showToast = (msg) => {
                 setToastMsg(msg);
                 setTimeout(() => setToastMsg(''), 3000);
@@ -176,7 +200,7 @@
             useEffect(() => {
                 if (!isFirebaseDisabled && auth) {
                     auth.signInAnonymously().catch(e => {
-                        console.log("Modo Offline Ativado");
+                        console.log("Modo Offline");
                         setUseLocalStorage(true);
                     });
                 }
@@ -232,38 +256,49 @@
                 }
             };
 
-            // --- LÓGICA DE ÁUDIO HÍBRIDO ---
+            // --- LISTENERS DE TEMPO (NOVO) ---
+            useEffect(() => {
+                const audio = audioRef.current;
+                
+                const updateTime = () => setCurrentTime(audio.currentTime);
+                const updateDuration = () => setDuration(audio.duration);
+                const onEnded = () => setIsPlaying(false);
+
+                audio.addEventListener('timeupdate', updateTime);
+                audio.addEventListener('loadedmetadata', updateDuration);
+                audio.addEventListener('ended', onEnded);
+
+                return () => {
+                    audio.removeEventListener('timeupdate', updateTime);
+                    audio.removeEventListener('loadedmetadata', updateDuration);
+                    audio.removeEventListener('ended', onEnded);
+                };
+            }, []);
+
+            // --- LÓGICA DE ÁUDIO ---
             useEffect(() => {
                 if (!currentTrack) return;
                 
-                // Resetar players quando muda a fonte ou musica
                 if (sourceMode === 'youtube') {
-                    // Parar áudio HTML5 se estiver tocando
                     audioRef.current.pause();
-                    
-                    // Controlar YouTube via postMessage
                     if(youtubeRef.current && youtubeRef.current.contentWindow) {
                         const command = isPlaying ? 'playVideo' : 'pauseVideo';
-                        // Pequeno delay para garantir que o iframe está pronto e carregado
                         setTimeout(() => {
                             try { youtubeRef.current.contentWindow.postMessage(JSON.stringify({'event': 'command', 'func': command}), '*'); } catch(e){}
                         }, 500);
                     }
                 } else {
-                    // Modo Preview/Local
-                    // Tenta pausar o YouTube
                     if(youtubeRef.current && youtubeRef.current.contentWindow) {
                         try { youtubeRef.current.contentWindow.postMessage(JSON.stringify({'event': 'command', 'func': 'pauseVideo'}), '*'); } catch(e){}
                     }
                     
-                    // Configurar source do Audio HTML5
                     if (audioRef.current.src !== currentTrack.previewUrl) {
                         audioRef.current.src = currentTrack.previewUrl;
                     }
                     
                     if (isPlaying) {
                         audioRef.current.play().catch(e => {
-                            console.log("Autoplay bloqueado pelo navegador", e);
+                            console.log("Bloqueio de Autoplay", e);
                             setIsPlaying(false);
                         });
                     } else {
@@ -272,9 +307,20 @@
                 }
             }, [currentTrack, isPlaying, sourceMode]);
 
-            useEffect(() => {
-                audioRef.current.onended = () => setIsPlaying(false);
-            }, []);
+            // Formatação de Tempo (MM:SS)
+            const formatTime = (time) => {
+                if (isNaN(time)) return "0:00";
+                const minutes = Math.floor(time / 60);
+                const seconds = Math.floor(time % 60);
+                return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            };
+
+            // Seek (Arrastar a barra)
+            const handleSeek = (e) => {
+                const newTime = e.target.value;
+                audioRef.current.currentTime = newTime;
+                setCurrentTime(newTime);
+            };
 
             // Gemini AI
             const fetchGeminiData = async (track) => {
@@ -303,7 +349,6 @@
                 if (currentTrack?.title === track.title) {
                     setShowFullScreenPlayer(true);
                 } else {
-                    // Resetar para Preview sempre que mudar de música (mais seguro)
                     setSourceMode(track.isLocal ? 'local' : 'preview'); 
                     setCurrentTrack(track);
                     setIsPlaying(true);
@@ -345,7 +390,7 @@
                 } catch (e) { showToast("Erro na busca."); } finally { setLoading(false); }
             };
 
-            // URL YouTube Segura com busca por Lyrics
+            // URL YouTube
             const getYoutubeUrl = () => {
                 if (!currentTrack) return '';
                 const term = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist} lyrics`);
@@ -500,7 +545,6 @@
                                 <button className="text-white opacity-80"><i className="fas fa-ellipsis-v text-xl"></i></button>
                             </div>
 
-                            {/* ÁREA DO PLAYER (HÍBRIDA) */}
                             <div className="flex-1 w-full bg-black flex flex-col items-center justify-center relative overflow-hidden">
                                 {sourceMode === 'youtube' ? (
                                     <div className="w-full h-full flex flex-col items-center justify-center">
@@ -534,7 +578,6 @@
                                     </div>
                                 )}
 
-                                {/* SELETOR DE FONTE DE ÁUDIO */}
                                 {!currentTrack.isLocal && (
                                     <div className="absolute bottom-4 flex gap-2 z-30">
                                         <button 
@@ -564,6 +607,25 @@
                                     </button>
                                 </div>
 
+                                {/* BARRA DE PROGRESSO (NOVO) */}
+                                {sourceMode !== 'youtube' && (
+                                    <div className="w-full mt-4">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max={duration || 0}
+                                            value={currentTime}
+                                            onChange={handleSeek}
+                                            className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+                                            style={{accentColor: "white"}}
+                                        />
+                                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                            <span>{formatTime(currentTime)}</span>
+                                            <span>{formatTime(duration)}</span>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex justify-between items-center px-4 mt-4">
                                     <button className="text-gray-400 hover:text-white"><i className="fas fa-random text-xl"></i></button>
                                     <button className="text-white hover:text-gray-300"><Icons.SkipBack width={32} /></button>
@@ -585,7 +647,7 @@
                                         <img src={currentTrack.artwork} className="w-10 h-10 rounded" />
                                         <div>
                                             <p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p>
-                                            <p className="text-xs text-gray-400 truncate">{currentTrack.artist}</p>
+                                            <p className="text-xs text-gray-500">{currentTrack.artist}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 items-center">
