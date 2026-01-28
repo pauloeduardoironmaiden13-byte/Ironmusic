@@ -31,6 +31,7 @@
         h1, h2, h3, .rock-font { font-family: 'Oswald', sans-serif; }
         
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
         .gradient-spot {
             position: absolute;
@@ -169,7 +170,8 @@
             const [toastMsg, setToastMsg] = useState('');
             
             // source: 'preview' (iTunes) | 'full' (Server) | 'local' (Arquivo)
-            const [sourceMode, setSourceMode] = useState('preview'); 
+            // INICIALIZA COMO 'full' se tiver backend, senão preview
+            const [sourceMode, setSourceMode] = useState(BACKEND_URL ? 'full' : 'preview'); 
             const [audioLoading, setAudioLoading] = useState(false);
 
             const [currentTime, setCurrentTime] = useState(0);
@@ -235,16 +237,18 @@
             // --- FUNÇÃO PARA PEGAR URL DO SERVER ---
             const getAudioLink = async (title, artist) => {
                 try {
+                    // Busca video ID no Piped (API pública do YouTube)
                     const search = encodeURIComponent(`${title} ${artist} lyrics`);
                     const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${search}&filter=music_songs`);
                     const data = await res.json();
                     if (data.items && data.items.length > 0) {
                         const videoId = data.items[0].url.split('v=')[1];
+                        // Monta a URL para o SEU servidor processar o áudio
                         return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
                     }
                     return null;
                 } catch (e) {
-                    console.error("Erro ao buscar link", e);
+                    console.error("Erro ao buscar link:", e);
                     return null;
                 }
             };
@@ -255,21 +259,27 @@
 
                 const loadAndPlay = async () => {
                     let src = "";
+                    setAudioLoading(true); // Começa carregando
                     
                     if (currentTrack.isLocal) {
                         src = currentTrack.previewUrl;
-                    } else if (sourceMode === 'preview') {
-                        src = currentTrack.previewUrl;
+                        setAudioLoading(false);
                     } else if (sourceMode === 'full' && BACKEND_URL) {
-                        setAudioLoading(true);
+                        // TENTA O SERVIDOR PRIMEIRO
                         const serverLink = await getAudioLink(currentTrack.title, currentTrack.artist);
                         if (serverLink) {
                             src = serverLink;
                         } else {
-                            showToast("Erro no servidor. Usando preview.");
-                            setSourceMode('preview'); // Fallback
+                            // Se falhar o servidor, avisa e usa preview
+                            showToast("Servidor ocupado. Usando preview.");
+                            setSourceMode('preview');
                             src = currentTrack.previewUrl;
+                            setAudioLoading(false);
                         }
+                    } else {
+                        // MODO PREVIEW
+                        src = currentTrack.previewUrl;
+                        setAudioLoading(false);
                     }
 
                     if (src && audioRef.current.src !== src) {
@@ -313,10 +323,16 @@
             useEffect(() => { if ((view === 'lyrics' || view === 'chords') && currentTrack && !geminiData) fetchGemini(currentTrack); }, [view, currentTrack]);
 
             const handlePlay = (t) => {
-                if (currentTrack?.title === t.title) setShowFullScreenPlayer(true);
-                else {
-                    setSourceMode(t.isLocal ? 'local' : 'preview'); 
-                    setCurrentTrack(t); setIsPlaying(true); setGeminiData(null); setShowFullScreenPlayer(true); addToHistory(t);
+                if (currentTrack?.title === t.title) {
+                    setShowFullScreenPlayer(true);
+                } else {
+                    // MUDANÇA: AGORA O PADRÃO É 'FULL' (SERVIDOR)
+                    setSourceMode((BACKEND_URL && !t.isLocal) ? 'full' : 'preview'); 
+                    setCurrentTrack(t); 
+                    setIsPlaying(true); 
+                    setGeminiData(null); 
+                    setShowFullScreenPlayer(true); 
+                    addToHistory(t);
                 }
             };
 
@@ -429,9 +445,11 @@
                                 
                                 {!currentTrack.isLocal && BACKEND_URL && (
                                     <div className="mt-8 flex gap-2 z-30">
-                                        <button onClick={() => setSourceMode('preview')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'preview' ? 'bg-white text-black' : 'border-white/30 text-white/50'}`}>Preview (30s)</button>
-                                        <button onClick={() => setSourceMode('full')} className={`text-[10px] px-3 py-1 rounded-full border flex items-center gap-2 ${sourceMode === 'full' ? 'bg-green-600 text-white border-green-600' : 'border-white/30 text-white/50'}`}>
-                                            <Icons.Server width={12} /> Completa (Server)
+                                        <button onClick={() => setSourceMode('full')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'full' ? 'bg-green-600 text-white border-green-600' : 'border-white/30 text-white/50'}`}>
+                                            FONTE: SERVIDOR (COMPLETA)
+                                        </button>
+                                        <button onClick={() => setSourceMode('preview')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'preview' ? 'bg-white text-black' : 'border-white/30 text-white/50'}`}>
+                                            FONTE: ITUNES (30s)
                                         </button>
                                     </div>
                                 )}
@@ -451,7 +469,7 @@
                                 <div className="flex justify-between items-center px-4 mt-4">
                                     <button><Icons.SkipBack width={32} /></button>
                                     <button onClick={() => setIsPlaying(!isPlaying)} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
-                                        {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} className="ml-1" />}
+                                        {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} />}
                                     </button>
                                     <button><Icons.Skip width={32} /></button>
                                 </div>
