@@ -99,16 +99,15 @@
             SkipBack: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>,
             Heart: ({ filled, ...p }) => <svg {...p} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>,
             ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
-            ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>
+            ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>,
+            Refresh: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
         };
 
         function App() {
-            // Estados Visuais
             const [view, setView] = useState('home'); 
             const [activeTheme, setActiveTheme] = useState('yellow');
             const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(false); 
             
-            // Estados Dados
             const [currentTrack, setCurrentTrack] = useState(null);
             const [isPlaying, setIsPlaying] = useState(false);
             const [history, setHistory] = useState([]);
@@ -116,6 +115,13 @@
             const [query, setQuery] = useState('');
             const [searchResults, setSearchResults] = useState([]);
             const [loading, setLoading] = useState(false);
+            
+            // --- ESTRATÉGIA DE BUSCA DE VÍDEO ---
+            // 0: lyrics (padrão)
+            // 1: audio
+            // 2: visualizer
+            // 3: topic (oficial)
+            const [searchVariant, setSearchVariant] = useState(0); 
             
             const [useLocalStorage, setUseLocalStorage] = useState(false);
             const [geminiData, setGeminiData] = useState(null);
@@ -128,15 +134,11 @@
                 if (auth) auth.signInAnonymously().catch(e => console.warn("Auth falhou", e));
             }, []);
 
-            // Carregar Favoritos/Histórico
+            // Carregar Dados
             useEffect(() => {
                 const loadLocal = (key, setter) => {
-                    try {
-                        const data = localStorage.getItem(key);
-                        if (data) setter(JSON.parse(data));
-                    } catch(e) {}
+                    try { const data = localStorage.getItem(key); if (data) setter(JSON.parse(data)); } catch(e) {}
                 };
-
                 if (db && !useLocalStorage) {
                     const unsubLiked = db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d => ({id: d.id, ...d.data()}))), () => { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); });
                     const unsubHist = db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d => ({id: d.id, ...d.data()}))), () => { setUseLocalStorage(true); loadLocal('iron_history', setHistory); });
@@ -192,16 +194,32 @@
                 }
             }, [view, currentTrack]);
 
+            // Controle do YouTube
+            useEffect(() => {
+                if (currentTrack && youtubeRef.current && youtubeRef.current.contentWindow) {
+                    const command = isPlaying ? 'playVideo' : 'pauseVideo';
+                    youtubeRef.current.contentWindow.postMessage(JSON.stringify({
+                        'event': 'command', 'func': command, 'args': []
+                    }), '*');
+                }
+            }, [isPlaying, currentTrack]);
+
             const handlePlay = (track) => {
                 if (currentTrack?.title === track.title) {
                     setShowFullScreenPlayer(true);
                 } else {
+                    setSearchVariant(0); // Reseta para a busca padrão
                     setCurrentTrack(track);
                     setIsPlaying(true);
                     setGeminiData(null);
                     setShowFullScreenPlayer(true);
                     addToHistory(track);
                 }
+            };
+
+            // Tenta próxima variante de busca se o vídeo der erro
+            const tryNextVideoVariant = () => {
+                setSearchVariant(prev => (prev + 1) % 4); // Cicla entre 0, 1, 2, 3
             };
 
             const searchMusic = async () => {
@@ -220,12 +238,23 @@
                 } catch (e) { alert("Erro na busca."); } finally { setLoading(false); }
             };
 
-            // URL YouTube
+            // URL YouTube Otimizada com Variação
             const getYoutubeUrl = () => {
                 if (!currentTrack) return '';
-                const term = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist} audio`);
+                
+                // Variantes de busca para "enganar" o bloqueio
+                let suffix = "lyrics";
+                if (searchVariant === 1) suffix = "audio official";
+                if (searchVariant === 2) suffix = "visualizer";
+                if (searchVariant === 3) suffix = "topic"; // Canal oficial (às vezes funciona)
+
+                const term = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist} ${suffix}`);
+                
+                // IMPORTANTE: enablejsapi=1 e origin corretos
                 const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
-                return `https://www.youtube.com/embed?listType=search&list=${term}&autoplay=1&playsinline=1&rel=0${origin}`;
+                
+                // Usando lista de busca para auto-play do primeiro resultado
+                return `https://www.youtube-nocookie.com/embed?listType=search&list=${term}&autoplay=1&playsinline=1&rel=0&enablejsapi=1${origin}`;
             };
 
             const getThemeData = () => {
@@ -253,7 +282,6 @@
                         </div>
                     </div>
 
-                    {/* CONTEÚDO PRINCIPAL */}
                     <div className={`flex-1 overflow-y-auto pb-32 no-scrollbar p-4 z-10 ${showFullScreenPlayer ? 'hidden' : 'block'}`}>
                         {view === 'home' && (
                             <div className="space-y-6 animate-fade-in">
@@ -358,7 +386,6 @@
                         )}
                     </div>
 
-                    {/* PLAYER FULL SCREEN - MUDANÇA: MOSTRA O VIDEO AQUI */}
                     {showFullScreenPlayer && currentTrack && (
                         <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in">
                             <div className="flex justify-between items-center p-6 bg-black">
@@ -367,17 +394,30 @@
                                 <button className="text-white opacity-80"><i className="fas fa-ellipsis-v text-xl"></i></button>
                             </div>
 
-                            {/* VÍDEO DO YOUTUBE (O QUE VC PEDIU) */}
-                            <div className="flex-1 w-full bg-black flex items-center justify-center">
+                            {/* VÍDEO DO YOUTUBE VISÍVEL */}
+                            <div className="flex-1 w-full bg-black flex flex-col items-center justify-center relative">
                                 <iframe 
                                     ref={youtubeRef}
-                                    className="w-full aspect-video max-h-[50vh]"
+                                    className="w-full aspect-video max-h-[50vh] z-10"
                                     src={getYoutubeUrl()} 
                                     title="YouTube Video" 
                                     frameBorder="0" 
                                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                                     allowFullScreen
                                 />
+                                
+                                {/* BOTÃO INTELIGENTE: TROCA A VERSÃO DO VÍDEO SE DER ERRO */}
+                                <div className="mt-4 z-20 flex gap-2">
+                                    <button 
+                                        onClick={tryNextVideoVariant} 
+                                        className="flex items-center gap-2 bg-white/10 border border-white/20 text-white px-4 py-2 rounded-full text-xs hover:bg-white/20 transition"
+                                    >
+                                        <Icons.Refresh width={14} /> 
+                                        {searchVariant === 0 ? "Vídeo não carregou? Trocar Versão" : 
+                                         searchVariant === 1 ? "Tentando Versão Áudio..." :
+                                         searchVariant === 2 ? "Tentando Visualizer..." : "Tentando Versão Oficial..."}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="p-8 pb-12 space-y-6 bg-black">
@@ -394,7 +434,6 @@
                                 <div className="flex justify-between items-center px-4 mt-4">
                                     <button className="text-gray-400 hover:text-white"><i className="fas fa-random text-xl"></i></button>
                                     <button className="text-white hover:text-gray-300"><Icons.SkipBack width={32} /></button>
-                                    {/* Botão de play é controlado pelo Iframe na maioria das vezes, mas mantemos visual */}
                                     <button onClick={() => setIsPlaying(!isPlaying)} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
                                         {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} className="ml-1" />}
                                     </button>
@@ -405,7 +444,6 @@
                         </div>
                     )}
 
-                    {/* MINI PLAYER */}
                     {!showFullScreenPlayer && (
                         <div className="fixed bottom-0 left-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
                             {currentTrack && (
