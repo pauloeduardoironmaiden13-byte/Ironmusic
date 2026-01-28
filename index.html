@@ -108,8 +108,8 @@
                 // Se já sabemos que a API está com erro, nem tenta (evita o 403)
                 if (isApiBroken) return null;
 
-                // Tenta uma busca mais ampla
-                const q = encodeURIComponent(`${title} ${artist}`);
+                // Tenta uma busca mais focada no clipe oficial, que costuma ter permissão de embed
+                const q = encodeURIComponent(`${title} ${artist} official video`);
                 try {
                     // ADICIONADO: videoEmbeddable=true para garantir que o vídeo pode tocar fora do YouTube
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&videoEmbeddable=true&maxResults=1&key=${YOUTUBE_API_KEY}`);
@@ -194,7 +194,7 @@
                     return `https://www.youtube.com/embed?listType=search&list=${searchQuery}&${params}`;
                 }
 
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params}`;
+                return `https://www.youtube.com/embed/${currentTrack.youtubeId.trim()}?${params}`;
             };
 
             const fetchGemini = async (t) => {
@@ -326,10 +326,11 @@
                                         </div>
                                         <div className="mt-6 flex flex-col items-center gap-2">
                                             {currentTrack.youtubeId !== 'SEARCH_FALLBACK' ? (
-                                                <div className="text-center">
-                                                    <p className="text-green-400 font-mono text-sm mb-1 font-bold tracking-wider">ID ENCONTRADO</p>
-                                                    <p className="text-white text-xl font-bold bg-white/10 px-4 py-2 rounded-lg font-mono select-all">{currentTrack.youtubeId}</p>
-                                                    <a href={`https://www.youtube.com/watch?v=${currentTrack.youtubeId}`} target="_blank" className="text-xs text-gray-500 hover:text-white mt-2 block underline">Ver no YouTube</a>
+                                                <div className="bg-red-900/50 border border-red-500 p-4 rounded-lg mt-4 text-center">
+                                                    <p className="text-red-200 text-xs font-bold uppercase mb-1">ID Retornado pela API (Debug):</p>
+                                                    <p className="text-2xl font-mono font-bold text-white select-all">{currentTrack.youtubeId}</p>
+                                                    <p className="text-[10px] text-gray-400 mt-2">Se este ID for diferente do que você usou manualmente, a API escolheu outro vídeo.</p>
+                                                    <a href={`https://www.youtube.com/watch?v=${currentTrack.youtubeId}`} target="_blank" className="text-xs text-white/50 hover:text-white mt-4 block underline">Tentar abrir direto no YouTube</a>
                                                 </div>
                                             ) : (
                                                 <div className="text-center text-yellow-500">
