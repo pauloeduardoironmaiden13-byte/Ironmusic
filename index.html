@@ -158,22 +158,16 @@
             if (typeof firebase !== 'undefined' && firebase.apps.length === 0) {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
-                auth = firebase.auth();
-
-                auth.signInAnonymously().then(() => {
-                    console.log("✅ Firebase conectado com sucesso!");
-                    isFirebaseActive = true;
-                }).catch(e => {
-                    console.warn("⚠️ Firebase offline, usando LocalStorage:", e.message);
-                    isFirebaseActive = false;
-                });
+                console.log("✅ Firebase conectado com sucesso!");
+                isFirebaseActive = true;
             } else if (typeof firebase !== 'undefined') {
                 db = firebase.firestore();
-                auth = firebase.auth();
+                console.log("✅ Firebase já inicializado!");
                 isFirebaseActive = true;
             }
         } catch (e) {
             console.error("❌ Erro ao inicializar Firebase:", e);
+            console.warn("⚠️ Usando LocalStorage como fallback");
             isFirebaseActive = false;
         }
 
