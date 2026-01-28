@@ -45,18 +45,26 @@
         .vinyl-texture { background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px); }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #444; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 12px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; }
+        .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #444; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 12px; z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; }
         .toast.show { opacity: 1; }
 
-        /* Esconder visualmente, mas manter no DOM para funcionar o audio */
-        #youtube-player-container { 
-            position: fixed; 
-            top: -1000px; 
-            left: -1000px; 
-            width: 1px; 
-            height: 1px; 
-            opacity: 0.01; 
-            pointer-events: none;
+        /* Estilo do Player YouTube */
+        /* Quando 'hidden', sai da tela. Quando 'visible', ocupa o espaço do vinil */
+        .yt-hidden { position: fixed; top: -200vh; left: -200vw; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        .yt-visible-wrapper { 
+            width: 100%; 
+            height: 100%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            overflow: hidden;
+            border-radius: 12px;
+            background: #000;
+        }
+        .yt-visible-wrapper iframe {
+            width: 100%;
+            aspect-ratio: 16/9;
+            border: none;
         }
         
         /* Slider de tempo */
@@ -69,8 +77,6 @@
 </head>
 <body>
     <div id="root"></div>
-    <!-- Container fora do React para a API do YouTube injetar o iframe -->
-    <div id="youtube-player-container"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -143,6 +149,8 @@
             const audioRef = useRef(new Audio());
             const fileInputRef = useRef(null);
             const progressInterval = useRef(null);
+            // Ref para onde o player do YouTube deve ser "teletransportado"
+            const ytContainerRef = useRef(null);
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
@@ -150,6 +158,15 @@
             // 1. INICIALIZAÇÃO YOUTUBE
             // ========================
             useEffect(() => {
+                // Cria a div do player se não existir
+                let playerDiv = document.getElementById('youtube-player-element');
+                if (!playerDiv) {
+                    playerDiv = document.createElement('div');
+                    playerDiv.id = 'youtube-player-element';
+                    // Adiciona ao container global inicialmente (fora da vista)
+                    document.body.appendChild(playerDiv);
+                }
+
                 if (!window.YT) {
                     const tag = document.createElement('script');
                     tag.src = "https://www.youtube.com/iframe_api";
@@ -158,14 +175,46 @@
                     
                     window.onYouTubeIframeAPIReady = () => {
                         console.log("YT API Ready");
-                        ytPlayer = new YT.Player('youtube-player-container', {
-                            height: '1', width: '1',
-                            playerVars: { 'playsinline': 1, 'controls': 0, 'disablekb': 1, 'origin': window.location.origin },
+                        ytPlayer = new YT.Player('youtube-player-element', {
+                            height: '100%', 
+                            width: '100%',
+                            playerVars: { 
+                                'playsinline': 1, 
+                                'controls': 1, // Controles visíveis para teste
+                                'disablekb': 1, 
+                                'origin': window.location.origin 
+                            },
                             events: { 'onStateChange': onPlayerStateChange, 'onError': onPlayerError }
                         });
                     };
                 }
             }, []);
+
+            // Efeito para mover o iframe para dentro do modal quando ele abre
+            useEffect(() => {
+                const iframe = document.getElementById('youtube-player-element') || document.querySelector('#youtube-player-element iframe');
+                if (iframe) {
+                    if (showFullScreenPlayer && sourceMode === 'youtube' && ytContainerRef.current) {
+                        // Move para dentro do container visível
+                        iframe.style.position = 'relative';
+                        iframe.style.top = '0';
+                        iframe.style.left = '0';
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.style.opacity = '1';
+                        iframe.style.pointerEvents = 'auto';
+                        ytContainerRef.current.appendChild(iframe);
+                    } else {
+                        // Esconde fora da tela
+                        iframe.style.position = 'fixed';
+                        iframe.style.top = '-200vh';
+                        iframe.style.left = '-200vw';
+                        iframe.style.opacity = '0';
+                        iframe.style.pointerEvents = 'none';
+                        document.body.appendChild(iframe); // Devolve para o body
+                    }
+                }
+            }, [showFullScreenPlayer, sourceMode]);
 
             const onPlayerStateChange = (event) => {
                 if (event.data === YT.PlayerState.PLAYING) {
@@ -178,14 +227,12 @@
                 } else if (event.data === YT.PlayerState.ENDED) {
                     setIsPlaying(false);
                     stopProgressTimer();
-                    // Auto-play next logic could go here
                 }
             };
 
             const onPlayerError = (event) => {
                 console.warn("Erro no Player YouTube:", event.data);
                 showToast("Vídeo restrito. Usando Preview.");
-                // Fallback para Preview se o video falhar
                 setSourceMode('preview');
                 audioRef.current.src = currentTrack.previewUrl;
                 audioRef.current.play();
@@ -202,12 +249,14 @@
 
 
             // ========================
-            // 2. BUSCA DE ID (INTELIGENTE)
+            // 2. BUSCA DE ID
             // ========================
             const fetchVideoId = async (title, artist) => {
+                // Adiciona um delay artificial de 500ms para evitar spam
+                await new Promise(r => setTimeout(r, 500));
+                
                 const queries = [`${title} ${artist} audio`, `${title} ${artist} lyrics`, `${title} ${artist}`];
                 
-                // Tenta API Oficial primeiro (Mais confiável)
                 if (YOUTUBE_API_KEY && YOUTUBE_API_KEY !== "COLE_SUA_CHAVE_YOUTUBE_AQUI") {
                     for (const q of queries) {
                         try {
@@ -217,14 +266,6 @@
                         } catch(e) {}
                     }
                 }
-
-                // Tenta Piped (Scraper) se a oficial falhar
-                try {
-                    const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(title + " " + artist)}&filter=music_songs`);
-                    const data = await res.json();
-                    if (data.items && data.items.length > 0) return data.items[0].url.split('v=')[1];
-                } catch(e) {}
-
                 return null;
             };
 
@@ -244,9 +285,8 @@
                 setDuration(0);
                 addToHistory(track);
 
-                // Stop previous
+                // Stop previous audio
                 audioRef.current.pause();
-                if(ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
 
                 if (track.isLocal) {
                     setSourceMode('local');
@@ -256,22 +296,27 @@
                     return;
                 }
 
-                // Busca ID se não tiver
+                // Busca ID
                 let vid = track.youtubeId;
                 if (!vid) {
-                    showToast("Buscando áudio...");
+                    showToast("Buscando no YouTube...");
                     vid = await fetchVideoId(track.title, track.artist);
                     if (vid) setCurrentTrack(prev => ({...prev, youtubeId: vid}));
                 }
 
                 if (vid) {
                     setSourceMode('youtube');
-                    if (ytPlayer && ytPlayer.loadVideoByUrl) {
-                        // USANDO URL COMPLETA COM WATCH?V= COMO SOLICITADO
-                        ytPlayer.loadVideoByUrl(`https://www.youtube.com/watch?v=${vid}`);
+                    if (ytPlayer) {
+                        if (ytPlayer.loadVideoByUrl) {
+                            // USANDO loadVideoByUrl COMO SOLICITADO
+                            console.log("Carregando URL: ", `https://www.youtube.com/watch?v=${vid}`);
+                            ytPlayer.loadVideoByUrl(`https://www.youtube.com/watch?v=${vid}`);
+                        } else if (ytPlayer.loadVideoById) {
+                            ytPlayer.loadVideoById(vid);
+                        }
                     }
                 } else {
-                    showToast("Áudio não encontrado. Usando Preview.");
+                    showToast("Não encontrado. Preview.");
                     setSourceMode('preview');
                     audioRef.current.src = track.previewUrl;
                     audioRef.current.play();
@@ -306,7 +351,7 @@
                 return () => { a.removeEventListener('timeupdate', upT); a.removeEventListener('loadedmetadata', upD); a.removeEventListener('ended', onE); };
             }, []);
 
-            // Firebase & LocalStorage Logic (Simplificada)
+            // Firebase & LocalStorage Logic
             useEffect(() => { if (!isFirebaseDisabled && auth) auth.signInAnonymously().catch(()=>{ setUseLocalStorage(true); }); }, []);
             useEffect(() => {
                 const loadLocal = (k,s) => { try{s(JSON.parse(localStorage.getItem(k)||"[]"))}catch(e){} };
@@ -343,27 +388,25 @@
                 } catch(e) { showToast("Erro na busca."); } finally { setLoading(false); }
             };
             
-            // Gemini
-            useEffect(() => {
-                const fetchGemini = async () => {
-                    if(!currentTrack || !GEMINI_API_KEY) return;
-                    setIsGeminiLoading(true); setGeminiData(null);
-                    try {
-                         const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                            method: "POST", headers: {"Content-Type": "application/json"},
-                            body: JSON.stringify({ contents: [{ parts: [{ text: `JSON lyrics, translation (pt-br), chords, tabs for "${currentTrack.title}" - "${currentTrack.artist}"` }] }] })
-                        });
-                        const d = await r.json();
-                        setGeminiData(JSON.parse(d.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim()));
-                    } catch(e){} finally { setIsGeminiLoading(false); }
-                };
-                if(view === 'lyrics' || view === 'chords') fetchGemini();
-            }, [view, currentTrack]);
-
             const handleFileUpload = (e) => {
                 const f = e.target.files[0]; if(!f) return;
                 handlePlay({ id: Date.now(), title: f.name.replace(/\.[^/.]+$/, ""), artist: "Local", artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3", previewUrl: URL.createObjectURL(f), isLocal: true });
+                showToast("Arquivo carregado!");
             };
+
+            const fetchGemini = async (t) => {
+                if (!GEMINI_API_KEY) return;
+                setIsGeminiLoading(true); setGeminiData(null);
+                try {
+                    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                        method: "POST", headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({ contents: [{ parts: [{ text: `JSON lyrics, translation (pt-br), chords, tabs for "${t.title}" - "${t.artist}"` }] }] })
+                    });
+                    const d = await r.json();
+                    setGeminiData(JSON.parse(d.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim()));
+                } catch(e){} finally { setIsGeminiLoading(false); }
+            };
+            useEffect(() => { if ((view === 'lyrics' || view === 'chords') && currentTrack && !geminiData) fetchGemini(currentTrack); }, [view, currentTrack]);
 
             const formatTime = (t) => { if(isNaN(t)) return "0:00"; const m=Math.floor(t/60), s=Math.floor(t%60); return `${m}:${s<10?'0':''}${s}`; };
             const theme = activeTheme === 'purple' ? {spot:'theme-purple-spot', text:'text-purple-500'} : activeTheme === 'green' ? {spot:'theme-green-spot', text:'text-green-500'} : {spot:'theme-yellow-spot', text:'text-yellow-500'};
@@ -419,26 +462,46 @@
                         <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in">
                             <div className="flex justify-between items-center p-6 bg-black">
                                 <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
-                                <div className="flex flex-col items-center"><span className="text-xs uppercase tracking-widest text-gray-400">PLAYER</span><span className="text-[9px] text-gray-500">{sourceMode === 'youtube' ? 'YouTube Audio' : 'Preview / Local'}</span></div>
-                                <div className="w-8"></div>
+                                <span className="text-xs uppercase tracking-widest text-gray-400">TOCANDO AGORA</span>
+                                <button><i className="fas fa-ellipsis-v text-xl"></i></button>
                             </div>
+                            
                             <div className="flex-1 w-full bg-black px-4 flex flex-col items-center justify-center relative">
-                                <div className="relative w-72 h-72">
-                                    <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
-                                        <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
-                                        <div className="absolute w-4 h-4 bg-white rounded-full"></div>
+                                {sourceMode === 'youtube' ? (
+                                    /* CONTAINER DO IFRAME REAL DO YOUTUBE */
+                                    <div ref={ytContainerRef} className="w-full aspect-video bg-black flex items-center justify-center rounded-lg overflow-hidden shadow-2xl border border-white/10">
+                                        {/* O iframe será movido para cá via Portal/DOM manipulation */}
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="relative w-72 h-72 md:w-96 md:h-96">
+                                        <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
+                                            <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
+                                            <div className="absolute w-4 h-4 bg-white rounded-full"></div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {!currentTrack.isLocal && (
+                                    <div className="mt-8 flex gap-2 z-30">
+                                        <button onClick={() => setSourceMode('preview')} className={`text-[10px] px-3 py-1 rounded-full border ${sourceMode === 'preview' ? 'bg-white text-black' : 'border-white/30 text-white/50'}`}>Preview (30s)</button>
+                                        <button onClick={() => setSourceMode('youtube')} className={`text-[10px] px-3 py-1 rounded-full border flex items-center gap-2 ${sourceMode === 'youtube' ? 'bg-red-600 text-white border-red-600' : 'border-white/30 text-white/50'}`}>
+                                            <Icons.Youtube width={14} /> Completa (Vídeo)
+                                        </button>
+                                    </div>
+                                )}
                             </div>
+
                             <div className="p-8 pb-12 space-y-6 bg-black">
                                 <div className="flex justify-between items-end">
                                     <div><h2 className="text-xl font-bold text-white mb-1 truncate w-64">{currentTrack.title}</h2><p className={`text-sm ${theme.text}`}>{currentTrack.artist}</p></div>
                                     <button onClick={() => toggleLike(currentTrack)}><Icons.Heart width={28} filled={isLiked} className={isLiked ? theme.text : "text-gray-400"} /></button>
                                 </div>
+
                                 <div className="w-full mt-4">
                                     <input type="range" min="0" max={duration || 100} value={currentTime} onChange={handleSeek} />
                                     <div className="flex justify-between text-xs text-gray-500 mt-1"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
                                 </div>
+
                                 <div className="flex justify-between items-center px-4 mt-4">
                                     <button><Icons.SkipBack width={32} /></button>
                                     <button onClick={togglePlayPause} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
