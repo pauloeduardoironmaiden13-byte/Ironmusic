@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-    <title>IronMusic AI</title>
+    <title>IronMusic Global</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,7 @@
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Firebase SDKs -->
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -40,26 +40,28 @@
         .theme-purple-spot { background: radial-gradient(circle, #581c87 0%, transparent 70%); }
         .theme-green-spot  { background: radial-gradient(circle, #14532d 0%, transparent 70%); }
         
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #fff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        .loader { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         .vinyl-spin { animation: spin 8s linear infinite; }
         .vinyl-paused { animation-play-state: paused; }
-        
-        .vinyl-texture {
-            background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px);
-        }
+        .vinyl-texture { background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px); }
 
-        .toast {
-            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-            background: rgba(50, 50, 50, 0.9); color: white; padding: 10px 20px;
-            border-radius: 20px; font-size: 12px; z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none;
-        }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #fff; cursor: pointer; margin-top: -4px; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #333; border-radius: 2px; }
+        
+        .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #444; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 12px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
         .toast.show { opacity: 1; }
+
+        #youtube-player-container { position: absolute; top: -9999px; left: -9999px; visibility: hidden; }
+        
+        .offline-badge { font-size: 9px; background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
     </style>
 </head>
 <body>
     <div id="root"></div>
+    <div id="youtube-player-container"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -72,23 +74,37 @@
             messagingSenderId: "1098477636469",
             appId: "1:1098477636469:web:b991864533302d78a1613c"
         };
-        const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
         
-        // SUA CHAVE DO YOUTUBE
         const YOUTUBE_API_KEY = "AIzaSyDW4fEAz_MWn2q3jJZtZ0Iah-ylvkIzLGo"; 
+        const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
 
-        // Inicialização Firebase
-        let db = null; let auth = null; let isFirebaseDisabled = false;
-        if (firebaseConfig.projectId === "ironmusic-727bb") { isFirebaseDisabled = true; }
-        else {
+        // 1. BLINDAGEM DE FIREBASE
+        // Se o projeto for o suspenso, nem tenta conectar para não dar erro no console
+        let db = null; 
+        let auth = null; 
+        let isFirebaseDisabled = false;
+
+        if (firebaseConfig.projectId === "ironmusic-727bb") {
+            isFirebaseDisabled = true;
+            console.log("Projeto Suspenso: Modo Offline Ativado Automaticamente.");
+        } else {
             try {
-                if (typeof firebase !== 'undefined' && firebase.apps.length === 0) { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); auth = firebase.auth(); }
-                else if (typeof firebase !== 'undefined') { db = firebase.firestore(); auth = firebase.auth(); }
-            } catch (e) { isFirebaseDisabled = true; }
+                if (typeof firebase !== 'undefined' && firebase.apps.length === 0) { 
+                    firebase.initializeApp(firebaseConfig); 
+                    db = firebase.firestore(); 
+                    auth = firebase.auth(); 
+                } else if (typeof firebase !== 'undefined') { 
+                    db = firebase.firestore(); 
+                    auth = firebase.auth(); 
+                }
+            } catch (e) { 
+                console.error("Firebase Init Error", e); 
+                isFirebaseDisabled = true;
+            }
         }
 
         const Icons = {
-            Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>,
+            Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>,
             Search: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
             Play: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
             Pause: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>,
@@ -102,10 +118,13 @@
             ExternalLink: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         };
 
+        let ytPlayer = null;
+
         function App() {
             const [view, setView] = useState('home'); 
             const [activeTheme, setActiveTheme] = useState('yellow');
             const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(false); 
+            const [currentTrack, setCurrentTrack] = useState(null);
             const [isPlaying, setIsPlaying] = useState(false);
             const [history, setHistory] = useState([]);
             const [likedSongs, setLikedSongs] = useState([]); 
@@ -114,109 +133,203 @@
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
             
-            // source: 'preview' | 'youtube' | 'local'
+            // 'preview' | 'youtube' | 'local'
             const [sourceMode, setSourceMode] = useState('youtube'); 
 
-            // Track state - null inicialmente
-            const [currentTrack, setCurrentTrack] = useState(null);
-
-            const [currentTime, setCurrentTime] = useState(0);
-            const [duration, setDuration] = useState(0);
-
+            // Força uso local se Firebase estiver disabled
             const [useLocalStorage, setUseLocalStorage] = useState(isFirebaseDisabled);
+
             const [geminiData, setGeminiData] = useState(null);
             const [isGeminiLoading, setIsGeminiLoading] = useState(false);
 
+            // States de tempo
+            const [currentTime, setCurrentTime] = useState(0);
+            const [duration, setDuration] = useState(0);
+            const progressInterval = useRef(null);
+
             const audioRef = useRef(new Audio());
-            const youtubeRef = useRef(null);
             const fileInputRef = useRef(null);
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
-            // Auth
-            useEffect(() => { if (!isFirebaseDisabled && auth) auth.signInAnonymously().catch(()=>{ setUseLocalStorage(true); }); }, []);
+            // Inicializa YouTube Iframe API
+            useEffect(() => {
+                if (!window.YT) {
+                    const tag = document.createElement('script');
+                    tag.src = "https://www.youtube.com/iframe_api";
+                    const firstScriptTag = document.getElementsByTagName('script')[0];
+                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                    
+                    window.onYouTubeIframeAPIReady = () => {
+                        ytPlayer = new YT.Player('youtube-player-container', {
+                            height: '1', width: '1',
+                            playerVars: { 'playsinline': 1, 'controls': 0, 'disablekb': 1 },
+                            events: { 'onStateChange': onPlayerStateChange }
+                        });
+                    };
+                }
+            }, []);
 
-            // Data Load
+            const onPlayerStateChange = (event) => {
+                if (event.data === YT.PlayerState.PLAYING) {
+                    setIsPlaying(true);
+                    setDuration(ytPlayer.getDuration());
+                    startProgressTimer();
+                } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+                    setIsPlaying(false);
+                    stopProgressTimer();
+                }
+            };
+
+            const startProgressTimer = () => {
+                stopProgressTimer();
+                progressInterval.current = setInterval(() => {
+                    if (ytPlayer && ytPlayer.getCurrentTime) setCurrentTime(ytPlayer.getCurrentTime());
+                }, 1000);
+            };
+
+            const stopProgressTimer = () => { if (progressInterval.current) clearInterval(progressInterval.current); };
+
+            // Auth Firebase (Se não estiver desativado)
+            useEffect(() => {
+                if (!isFirebaseDisabled && auth) auth.signInAnonymously().catch(()=>{ setUseLocalStorage(true); });
+            }, []);
+
+            // Carregar Dados (Com prioridade Local se Firebase off)
             useEffect(() => {
                 const loadLocal = (key, setter) => { try { const d = localStorage.getItem(key); if(d) setter(JSON.parse(d)); } catch(e){} };
+                
                 if (!isFirebaseDisabled && db && !useLocalStorage) {
                     try {
-                        db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d=>({id:d.id,...d.data()}))), () => loadLocal('iron_likedSongs', setLikedSongs));
-                        db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), () => loadLocal('iron_history', setHistory));
-                    } catch(e) { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); }
-                } else { loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); }
+                        const u1 = db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d=>({id:d.id,...d.data()}))), () => { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); });
+                        const u2 = db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), () => { setUseLocalStorage(true); loadLocal('iron_history', setHistory); });
+                        return () => { u1(); u2(); };
+                    } catch(e) { 
+                        setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); 
+                    }
+                } else { 
+                    loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); 
+                }
             }, [useLocalStorage]);
-
-            // --- BUSCA ID DO VÍDEO (DINÂMICA) ---
-            const fetchYoutubeId = async (title, artist) => {
-                const q = encodeURIComponent(`${title} ${artist} lyrics`); // Busca lyrics para evitar bloqueio
-                try {
-                    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
-                    const data = await res.json();
-                    if (data.items && data.items.length > 0) {
-                        return data.items[0].id.videoId;
-                    }
-                } catch(e) { console.error("Erro YT API", e); }
-                return null;
-            };
-
-            // --- LÓGICA DE PLAYER ---
-            useEffect(() => {
-                const manageAudio = async () => {
-                    if (!currentTrack) return;
-
-                    // Pause native audio
-                    audioRef.current.pause();
-
-                    if (currentTrack.isLocal) {
-                        setSourceMode('local');
-                        audioRef.current.src = currentTrack.previewUrl;
-                        if(isPlaying) audioRef.current.play().catch(()=>{});
-                        return;
-                    }
-
-                    // Se não temos ID, busca agora
-                    if (!currentTrack.youtubeId) { 
-                        const vid = await fetchYoutubeId(currentTrack.title, currentTrack.artist);
-                        if (vid) {
-                            setCurrentTrack(prev => ({ ...prev, youtubeId: vid }));
-                        } else {
-                            showToast("Vídeo não encontrado. Usando Preview.");
-                            // Fallback para preview se tiver
-                            if(currentTrack.previewUrl) {
-                                setSourceMode('preview');
-                                audioRef.current.src = currentTrack.previewUrl;
-                                if(isPlaying) audioRef.current.play();
-                            }
-                        }
-                        return; 
-                    }
-
-                    setSourceMode('youtube');
-                    // Comanda o Iframe fantasma
-                    if(youtubeRef.current && youtubeRef.current.contentWindow) {
-                        const cmd = isPlaying ? 'playVideo' : 'pauseVideo';
-                        try { youtubeRef.current.contentWindow.postMessage(JSON.stringify({'event': 'command', 'func': cmd}), '*'); } catch(e){}
-                    }
-                };
-
-                manageAudio();
-            }, [currentTrack, isPlaying]);
-
-            const getYoutubeEmbed = () => {
-                if (!currentTrack || !currentTrack.youtubeId) return '';
-                const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1${origin}`;
-            };
 
             const toggleLike = (t) => {
                 const liked = likedSongs.find(s => s.title === t.title);
                 let newFavs = liked ? likedSongs.filter(s => s.title !== t.title) : [...likedSongs, t];
+                // Sempre salva local primeiro para ser rápido
                 setLikedSongs(newFavs); localStorage.setItem('iron_likedSongs', JSON.stringify(newFavs));
                 if (!useLocalStorage && !isFirebaseDisabled && db) { if(liked) db.collection('favorites').doc(liked.id).delete().catch(()=>{}); else db.collection('favorites').add(t).catch(()=>{}); }
             };
 
-            const fetchGemini = async (t) => {
+            const addToHistory = (t) => {
+                const h = [t, ...history].slice(0,10); setHistory(h); localStorage.setItem('iron_history', JSON.stringify(h));
+                if (!useLocalStorage && !isFirebaseDisabled && db) db.collection('history').add({...t, addedAt: new Date().toISOString()}).catch(()=>{});
+            };
+
+            // --- LÓGICA CORE: BUSCA E TOCA ---
+            const fetchVideoIdFallback = async (query) => {
+                // Fallback usando Piped API (Sem precisar de chave)
+                try {
+                    const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_songs`);
+                    const data = await res.json();
+                    if(data.items && data.items.length > 0) {
+                        return data.items[0].url.split('v=')[1];
+                    }
+                } catch(e) { console.warn("Fallback Piped falhou"); }
+                return null;
+            };
+
+            const getYouTubeID = async (track) => {
+                const q = `${track.title} ${track.artist} lyrics`;
+                
+                // 1. Tenta API Oficial
+                try {
+                    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(q)}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
+                    if (!res.ok) throw new Error("API Limit/Error");
+                    const data = await res.json();
+                    if (data.items && data.items.length > 0) return data.items[0].id.videoId;
+                } catch(e) {
+                    console.warn("API Oficial falhou, tentando fallback...", e);
+                }
+
+                // 2. Tenta Fallback (Piped)
+                return await fetchVideoIdFallback(q);
+            };
+
+            const handlePlay = async (track) => {
+                if(currentTrack?.title === track.title) { setShowFullScreenPlayer(true); return; }
+
+                setCurrentTrack(track); setShowFullScreenPlayer(true); setIsPlaying(false);
+                setCurrentTime(0); setDuration(0);
+                
+                if (track.isLocal) {
+                    setSourceMode('local');
+                    audioRef.current.src = track.previewUrl;
+                    audioRef.current.play();
+                    setIsPlaying(true);
+                    return;
+                }
+
+                // Se não tiver ID salvo, busca
+                let vid = track.youtubeId;
+                if (!vid) {
+                    vid = await getYouTubeID(track);
+                    if (vid) setCurrentTrack(prev => ({...prev, youtubeId: vid}));
+                }
+
+                if (vid) {
+                    setSourceMode('youtube');
+                    if (ytPlayer && ytPlayer.loadVideoById) {
+                        ytPlayer.loadVideoById(vid);
+                        ytPlayer.playVideo();
+                    }
+                } else {
+                    showToast("Vídeo não encontrado. Usando Preview.");
+                    setSourceMode('preview');
+                    audioRef.current.src = track.previewUrl;
+                    audioRef.current.play();
+                    setIsPlaying(true);
+                }
+                addToHistory(track);
+            };
+
+            const togglePlayPause = () => {
+                if (sourceMode === 'youtube' && ytPlayer) {
+                    if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+                    else ytPlayer.playVideo();
+                } else {
+                    if (isPlaying) audioRef.current.pause();
+                    else audioRef.current.play();
+                    setIsPlaying(!isPlaying);
+                }
+            };
+
+            const handleSeek = (e) => {
+                const time = parseFloat(e.target.value);
+                setCurrentTime(time);
+                if (sourceMode === 'youtube' && ytPlayer) ytPlayer.seekTo(time, true);
+                else audioRef.current.currentTime = time;
+            };
+
+            const searchMusic = async () => {
+                if (!query) return; setLoading(true);
+                try {
+                    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20`);
+                    const d = await r.json();
+                    setSearchResults(d.results.map(i => ({
+                        id: i.trackId, title: i.trackName, artist: i.artistName,
+                        artwork: i.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'), previewUrl: i.previewUrl
+                    })));
+                } catch(e) { showToast("Erro busca"); } finally { setLoading(false); }
+            };
+
+            const handleFileUpload = (e) => {
+                const f = e.target.files[0]; if(!f) return;
+                handlePlay({ id: Date.now(), title: f.name.replace(/\.[^/.]+$/, ""), artist: "Local", artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3", previewUrl: URL.createObjectURL(f), isLocal: true });
+                showToast("Arquivo carregado!");
+            };
+
+            // Gemini
+             const fetchGemini = async (t) => {
                 if (!GEMINI_API_KEY) return;
                 setIsGeminiLoading(true); setGeminiData(null);
                 try {
@@ -228,40 +341,17 @@
                     setGeminiData(JSON.parse(d.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim()));
                 } catch(e){} finally { setIsGeminiLoading(false); }
             };
-
             useEffect(() => { if ((view === 'lyrics' || view === 'chords') && currentTrack && !geminiData) fetchGemini(currentTrack); }, [view, currentTrack]);
-
-            const handlePlay = (t) => {
-                if (currentTrack?.title === t.title) {
-                    setShowFullScreenPlayer(true);
-                } else {
-                    // Reseta status para nova busca
-                    setCurrentTrack({...t, youtubeId: null}); 
-                    setIsPlaying(true);
-                    setGeminiData(null);
-                    setShowFullScreenPlayer(true);
-                    addToHistory(t);
-                }
-            };
-
-            const handleFileUpload = (e) => {
-                const f = e.target.files[0]; if(!f) return;
-                handlePlay({ id: Date.now(), title: f.name.replace(/\.[^/.]+$/, ""), artist: "Local", artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3", previewUrl: URL.createObjectURL(f), isLocal: true });
-                showToast("Arquivo carregado!");
-            };
-
-            const searchMusic = async () => {
-                if (!query) return; setLoading(true);
-                try {
-                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20`);
-                    const d = await r.json();
-                    setSearchResults(d.results.map(i => ({
-                        id: i.trackId, title: i.trackName, artist: i.artistName,
-                        artwork: i.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'),
-                        previewUrl: i.previewUrl
-                    })));
-                } catch(e) { showToast("Erro na busca."); } finally { setLoading(false); }
-            };
+            
+            // Listeners Audio Nativo
+            useEffect(() => {
+                const audio = audioRef.current;
+                const upTime = () => setCurrentTime(audio.currentTime);
+                const upDur = () => setDuration(audio.duration);
+                const onEnd = () => setIsPlaying(false);
+                audio.addEventListener('timeupdate', upTime); audio.addEventListener('loadedmetadata', upDur); audio.addEventListener('ended', onEnd);
+                return () => { audio.removeEventListener('timeupdate', upTime); audio.removeEventListener('loadedmetadata', upDur); audio.removeEventListener('ended', onEnd); };
+            }, []);
 
             const theme = activeTheme === 'purple' ? {spot:'theme-purple-spot', text:'text-purple-500'} : activeTheme === 'green' ? {spot:'theme-green-spot', text:'text-green-500'} : {spot:'theme-yellow-spot', text:'text-yellow-500'};
             const isLiked = currentTrack && likedSongs.some(s => s.title === currentTrack.title);
@@ -272,25 +362,13 @@
                     <div className={`toast ${toastMsg ? 'show' : ''}`}>{toastMsg}</div>
 
                     <div className="flex justify-between items-center p-4 pt-8 z-20 relative">
-                        <h1 className="text-2xl font-bold tracking-tighter italic">IRON<span className={theme.text}>MUSIC</span></h1>
+                        <h1 className="text-2xl font-bold tracking-tighter italic flex items-center gap-2">
+                            IRON<span className={theme.text}>MUSIC</span> {isFirebaseDisabled && <span className="offline-badge">OFFLINE</span>}
+                        </h1>
                         <div className="flex gap-2">
                             {['yellow', 'purple', 'green'].map(c => <button key={c} onClick={() => setActiveTheme(c)} className={`w-4 h-4 rounded-full bg-${c}-600 border ${activeTheme === c ? 'border-white' : 'border-transparent'}`}></button>)}
                         </div>
                     </div>
-                    
-                    {/* PLAYER FANTASMA (IFRAME INVISIVEL) */}
-                    {sourceMode === 'youtube' && currentTrack && currentTrack.youtubeId && (
-                         <div style={{position: 'fixed', top: '-200%', left: 0, width: '1px', height: '1px', opacity: 0.01}}>
-                             <iframe 
-                                ref={youtubeRef}
-                                width="200" height="200"
-                                src={getYoutubeEmbed()} 
-                                title="GhostPlayer" 
-                                frameBorder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            />
-                         </div>
-                    )}
 
                     <div className={`flex-1 overflow-y-auto pb-32 no-scrollbar p-4 z-10 ${showFullScreenPlayer ? 'hidden' : 'block'}`}>
                         {view === 'home' && (
@@ -354,19 +432,20 @@
                         <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in">
                             <div className="flex justify-between items-center p-6 bg-black">
                                 <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
-                                <span className="text-xs tracking-widest text-gray-400">TOCANDO AGORA</span>
-                                <button><i className="fas fa-ellipsis-v text-xl"></i></button>
+                                <span className="text-xs tracking-widest text-gray-400">PLAYER</span>
+                                <div className="w-8"></div>
                             </div>
-                            
-                            {/* VISUAL VINIL (SEMPRE AQUI, VIDEO ESCONDIDO) */}
-                            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
-                                <div className="relative w-72 h-72 md:w-96 md:h-96">
+
+                            <div className="flex-1 w-full bg-black px-4 flex flex-col items-center justify-center relative">
+                                <div className="relative w-72 h-72">
                                     <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
                                         <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
                                         <div className="absolute w-4 h-4 bg-white rounded-full"></div>
-                                        <div className="absolute w-1.5 h-1.5 bg-black rounded-full"></div>
                                     </div>
                                 </div>
+                                {!currentTrack.isLocal && <div className="absolute bottom-4 flex gap-2 z-30">
+                                    <span className="source-badge">{sourceMode === 'youtube' ? 'YouTube Audio' : sourceMode === 'local' ? 'Arquivo Local' : 'Preview'}</span>
+                                </div>}
                             </div>
 
                             <div className="p-8 pb-12 space-y-6 bg-black">
@@ -375,9 +454,14 @@
                                     <button onClick={() => toggleLike(currentTrack)}><Icons.Heart width={28} filled={isLiked} className={isLiked ? theme.text : "text-gray-400"} /></button>
                                 </div>
 
+                                <div className="w-full mt-4">
+                                    <input type="range" min="0" max={duration || 100} value={currentTime} onChange={handleSeek} />
+                                    <div className="flex justify-between text-xs text-gray-500 mt-1"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
+                                </div>
+
                                 <div className="flex justify-between items-center px-4 mt-4">
                                     <button><Icons.SkipBack width={32} /></button>
-                                    <button onClick={() => setIsPlaying(!isPlaying)} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
+                                    <button onClick={togglePlayPause} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
                                         {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} />}
                                     </button>
                                     <button><Icons.Skip width={32} /></button>
@@ -390,7 +474,7 @@
                         <div className="fixed bottom-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
                             {currentTrack && <div className="flex justify-between px-4 pb-3 border-b border-white/5 mb-2 cursor-pointer" onClick={() => setShowFullScreenPlayer(true)}>
                                 <div className="flex gap-3"><img src={currentTrack.artwork} className="w-10 h-10 rounded" /><div><p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p><p className="text-xs text-gray-500">{currentTrack.artist}</p></div></div>
-                                <div className="flex gap-4 items-center"><button onClick={(e)=>{e.stopPropagation();toggleLike(currentTrack)}}><Icons.Heart width={20} filled={isLiked} className={isLiked ? theme.text : "text-gray-500"} /></button><button onClick={(e)=>{e.stopPropagation();setIsPlaying(!isPlaying)}}>{isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}</button></div>
+                                <div className="flex gap-4 items-center"><button onClick={(e)=>{e.stopPropagation();toggleLike(currentTrack)}}><Icons.Heart width={20} filled={isLiked} className={isLiked ? theme.text : "text-gray-500"} /></button><button onClick={(e)=>{e.stopPropagation();togglePlayPause()}}>{isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}</button></div>
                             </div>}
                             <div className="flex justify-around pb-2">
                                 <NavButton icon={Icons.Home} label="Início" active={view==='home'} onClick={()=>setView('home')} color={theme.text}/>
