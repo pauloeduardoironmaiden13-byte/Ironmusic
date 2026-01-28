@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-    <title>IronMusic AI</title>
+    <title>IronMusic AI - Teste de Busca</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,11 +15,6 @@
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -64,28 +59,9 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBwG_7eZhTMRSIchNgu_r_dZfSWoKMie4s",
-            authDomain: "ironmusic-727bb.firebaseapp.com",
-            projectId: "ironmusic-727bb",
-            storageBucket: "ironmusic-727bb.firebasestorage.app",
-            messagingSenderId: "1098477636469",
-            appId: "1:1098477636469:web:b991864533302d78a1613c"
-        };
+        // --- SUAS CHAVES ---
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
-        
-        // SUA CHAVE DO YOUTUBE
         const YOUTUBE_API_KEY = "AIzaSyDW4fEAz_MWn2q3jJZtZ0Iah-ylvkIzLGo"; 
-
-        // Inicialização Firebase
-        let db = null; let auth = null; let isFirebaseDisabled = false;
-        if (firebaseConfig.projectId === "ironmusic-727bb") { isFirebaseDisabled = true; }
-        else {
-            try {
-                if (typeof firebase !== 'undefined' && firebase.apps.length === 0) { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); auth = firebase.auth(); }
-                else if (typeof firebase !== 'undefined') { db = firebase.firestore(); auth = firebase.auth(); }
-            } catch (e) { isFirebaseDisabled = true; }
-        }
 
         const Icons = {
             Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>,
@@ -98,40 +74,23 @@
             ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
             ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>,
             Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-            Youtube: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>,
             ExternalLink: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         };
 
         function App() {
-            const [view, setView] = useState('home'); 
+            // Inicializa na tela de busca para facilitar o teste
+            const [view, setView] = useState('search'); 
             const [activeTheme, setActiveTheme] = useState('yellow');
             const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(false); 
             const [isPlaying, setIsPlaying] = useState(false);
-            const [history, setHistory] = useState([]);
-            const [likedSongs, setLikedSongs] = useState([]); 
             const [query, setQuery] = useState('');
             const [searchResults, setSearchResults] = useState([]);
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
             
-            // source: 'preview' | 'youtube' | 'local'
             const [sourceMode, setSourceMode] = useState('youtube'); 
+            const [currentTrack, setCurrentTrack] = useState(null);
 
-            // INICIALIZAÇÃO FIXA PARA O TESTE DO USUÁRIO
-            const [currentTrack, setCurrentTrack] = useState({
-                id: "fixed-test",
-                title: "Slave To Master",
-                artist: "Alter Bridge",
-                artwork: "https://i.ytimg.com/vi/9mjcdoE6KGw/hqdefault.jpg",
-                isLocal: false,
-                previewUrl: "", // Não vamos usar
-                youtubeId: "9mjcdoE6KGw" // ID FORÇADO
-            });
-
-            const [currentTime, setCurrentTime] = useState(0);
-            const [duration, setDuration] = useState(0);
-
-            const [useLocalStorage, setUseLocalStorage] = useState(isFirebaseDisabled);
             const [geminiData, setGeminiData] = useState(null);
             const [isGeminiLoading, setIsGeminiLoading] = useState(false);
 
@@ -141,38 +100,26 @@
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
-            // Auth
-            useEffect(() => { if (!isFirebaseDisabled && auth) auth.signInAnonymously().catch(()=>{ setUseLocalStorage(true); }); }, []);
-
-            // Data Load
-            useEffect(() => {
-                const loadLocal = (key, setter) => { try { const d = localStorage.getItem(key); if(d) setter(JSON.parse(d)); } catch(e){} };
-                if (!isFirebaseDisabled && db && !useLocalStorage) {
-                    try {
-                        db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d=>({id:d.id,...d.data()}))), () => loadLocal('iron_likedSongs', setLikedSongs));
-                        db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d=>({id:d.id,...d.data()}))), () => loadLocal('iron_history', setHistory));
-                    } catch(e) { setUseLocalStorage(true); loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); }
-                } else { loadLocal('iron_likedSongs', setLikedSongs); loadLocal('iron_history', setHistory); }
-            }, [useLocalStorage]);
-
-            // Forçar abertura do player no inicio para teste
-            useEffect(() => {
-                setShowFullScreenPlayer(true);
-            }, []);
-
-            // --- BUSCA ID DO VÍDEO ---
+            // --- BUSCA ID DO VÍDEO (REMOVIDA A TRAVA DE TESTE FIXA) ---
             const fetchYoutubeId = async (title, artist) => {
-                // HARDCODE: SE FOR A MÚSICA DE TESTE, RETORNA O ID FIXO
-                if (title.toLowerCase().includes("slave") && artist.toLowerCase().includes("alter bridge")) {
-                    return "9mjcdoE6KGw";
-                }
-
                 const q = encodeURIComponent(`${title} ${artist} lyrics`);
                 try {
+                    console.log(`Buscando ID no YouTube para: ${title} - ${artist}`);
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
+                    
+                    if (!res.ok) {
+                        showToast("Erro na API do YouTube (Cota ou Permissão)");
+                        console.error("Erro API YT:", res.status);
+                        return null;
+                    }
+
                     const data = await res.json();
                     if (data.items && data.items.length > 0) {
-                        return data.items[0].id.videoId;
+                        const videoId = data.items[0].id.videoId;
+                        console.log("ID encontrado:", videoId);
+                        return videoId;
+                    } else {
+                        console.log("Nenhum vídeo encontrado");
                     }
                 } catch(e) { console.error("Erro YT API", e); }
                 return null;
@@ -195,11 +142,12 @@
 
                     // Se não temos ID, busca agora
                     if (!currentTrack.youtubeId) { 
+                        showToast(`Buscando "${currentTrack.title}" no YouTube...`);
                         const vid = await fetchYoutubeId(currentTrack.title, currentTrack.artist);
                         if (vid) {
                             setCurrentTrack(prev => ({ ...prev, youtubeId: vid }));
                         } else {
-                            showToast("Vídeo não encontrado.");
+                            showToast("Vídeo não encontrado ou Erro de API.");
                             // Fallback para preview se tiver
                             if(currentTrack.previewUrl) {
                                 setSourceMode('preview');
@@ -207,7 +155,7 @@
                                 if(isPlaying) audioRef.current.play();
                             }
                         }
-                        return; // O efeito rodará de novo quando youtubeId atualizar
+                        return; 
                     }
 
                     setSourceMode('youtube');
@@ -224,15 +172,8 @@
             const getYoutubeEmbed = () => {
                 if (!currentTrack || !currentTrack.youtubeId) return '';
                 const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
-                // USANDO LINK COM ID FIXO QUANDO DISPONÍVEL
+                // URL DE EMBED COM PARÂMETROS DE CONTROLE (NÃO ATRAPALHAM A VISUALIZAÇÃO)
                 return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1${origin}`;
-            };
-
-            const toggleLike = (t) => {
-                const liked = likedSongs.find(s => s.title === t.title);
-                let newFavs = liked ? likedSongs.filter(s => s.title !== t.title) : [...likedSongs, t];
-                setLikedSongs(newFavs); localStorage.setItem('iron_likedSongs', JSON.stringify(newFavs));
-                if (!useLocalStorage && !isFirebaseDisabled && db) { if(liked) db.collection('favorites').doc(liked.id).delete().catch(()=>{}); else db.collection('favorites').add(t).catch(()=>{}); }
             };
 
             const fetchGemini = async (t) => {
@@ -254,7 +195,7 @@
                 if (currentTrack?.title === t.title) {
                     setShowFullScreenPlayer(true);
                 } else {
-                    setCurrentTrack(t);
+                    setCurrentTrack({...t, youtubeId: null}); // Reseta o ID para forçar nova busca
                     setIsPlaying(true);
                     setGeminiData(null);
                     setShowFullScreenPlayer(true);
@@ -271,17 +212,16 @@
                 if (!query) return; setLoading(true);
                 try {
                     const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20`);
-                    const d = await r.json();
+                    const d = await res.json();
                     setSearchResults(d.results.map(i => ({
                         id: i.trackId, title: i.trackName, artist: i.artistName,
                         artwork: i.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'),
                         previewUrl: i.previewUrl
                     })));
-                } catch(e) { showToast("Erro na busca."); } finally { setLoading(false); }
+                } catch(e) { showToast("Erro na busca do iTunes."); } finally { setLoading(false); }
             };
 
             const theme = activeTheme === 'purple' ? {spot:'theme-purple-spot', text:'text-purple-500'} : activeTheme === 'green' ? {spot:'theme-green-spot', text:'text-green-500'} : {spot:'theme-yellow-spot', text:'text-yellow-500'};
-            const isLiked = currentTrack && likedSongs.some(s => s.title === currentTrack.title);
 
             return (
                 <div className="h-screen w-full flex flex-col relative">
@@ -297,40 +237,27 @@
 
                     <div className={`flex-1 overflow-y-auto pb-32 no-scrollbar p-4 z-10 ${showFullScreenPlayer ? 'hidden' : 'block'}`}>
                         {view === 'home' && (
-                            <div className="space-y-6 animate-fade-in">
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-xl font-bold flex items-center gap-2"><span className={theme.text}>•</span> Favoritos</h2>
-                                        <button onClick={() => fileInputRef.current.click()} className="text-xs bg-white/10 px-3 py-1 rounded-full flex gap-2"><Icons.Upload width={14}/> MP3</button>
-                                        <input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={handleFileUpload} />
-                                    </div>
-                                    {likedSongs.length === 0 ? <p className="text-white/40 text-sm text-center py-10">Nada aqui ainda.</p> : 
-                                        <div className="space-y-2">{likedSongs.map((t, i) => (
-                                            <div key={i} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer">
-                                                <img src={t.artwork} className="w-10 h-10 rounded" />
-                                                <div className="flex-1 overflow-hidden"><p className="font-bold truncate text-sm">{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div>
-                                                <Icons.Heart width={16} filled={true} className={theme.text} />
-                                            </div>
-                                        ))}</div>
-                                    }
-                                    {history.length > 0 && <div className="mt-8"><h2 className="text-xl font-bold mb-4">• Recentes</h2>
-                                        <div className="grid grid-cols-2 gap-3">{history.map((t,i) => <div key={i} onClick={() => handlePlay(t)} className="bg-white/5 p-3 rounded-lg"><p className="font-bold truncate text-xs">{t.title}</p><p className="text-[10px] text-gray-500">{t.artist}</p></div>)}</div>
-                                    </div>}
-                                </div>
+                            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+                                <p className="text-gray-400">Para testar, vá para a aba Buscar.</p>
+                                <button onClick={()=>setView('search')} className={`bg-white/10 px-6 py-3 rounded-full font-bold ${theme.text}`}>Ir para Busca</button>
                             </div>
                         )}
 
                         {view === 'search' && (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="relative">
-                                    <input type="text" placeholder="Buscar..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} />
+                                    <input type="text" placeholder="Digite música ou artista..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} />
                                     <div className="absolute left-4 top-4 text-gray-400"><Icons.Search width={20} /></div>
+                                    <button onClick={searchMusic} className="absolute right-2 top-2 bg-white/10 p-2 rounded-full text-xs">Buscar</button>
                                 </div>
                                 {loading && <div className="loader mx-auto"></div>}
-                                <div className="space-y-2">{searchResults.map(t => (
-                                    <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer">
+                                <div className="space-y-2">
+                                    {searchResults.length === 0 && !loading && query && <p className="text-center text-gray-500 text-sm">Pressione Enter ou clique em Buscar</p>}
+                                    {searchResults.map(t => (
+                                    <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer border border-transparent hover:border-white/10 transition">
                                         <img src={t.artwork} className="w-12 h-12 rounded" />
                                         <div className="flex-1 overflow-hidden"><p className={`font-bold truncate ${currentTrack?.title === t.title ? theme.text : ''}`}>{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div>
+                                        <Icons.Play width={16} className="text-white/50" />
                                     </div>
                                 ))}</div>
                             </div>
@@ -348,7 +275,7 @@
                                         )}
                                         {!currentTrack && <p className="text-center text-gray-500">Selecione uma música</p>}
                                     </div>
-                                ) : <p className="text-center text-gray-500 py-20">Selecione uma música</p>}
+                                ) : <p className="text-center text-gray-500 py-20">Selecione uma música na busca</p>}
                             </div>
                         )}
                     </div>
@@ -366,22 +293,16 @@
                                     <div className="w-full h-full flex flex-col items-center justify-center">
                                         <iframe 
                                             ref={youtubeRef}
-                                            className="w-full aspect-video max-h-[50vh] z-10"
+                                            className="w-full aspect-video max-h-[50vh] z-10 bg-black"
                                             src={getYoutubeEmbed()} 
                                             title="YouTube Video" 
                                             frameBorder="0" 
                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                                             allowFullScreen
                                         />
-                                        <div className="mt-4 z-20">
-                                            <p className="text-white/30 text-[10px] text-center mb-2">Se der erro, tente o app:</p>
-                                            <a 
-                                                href={`https://www.youtube.com/watch?v=${currentTrack.youtubeId}`} 
-                                                target="_blank" 
-                                                className="flex items-center gap-2 bg-red-600/20 border border-red-600 text-red-500 px-4 py-2 rounded-full text-xs hover:bg-red-600 hover:text-white transition"
-                                            >
-                                                <Icons.ExternalLink width={14} /> Abrir no YouTube
-                                            </a>
+                                        <div className="mt-6 flex flex-col items-center gap-2">
+                                            <p className="text-gray-500 text-xs">ID do YouTube: {currentTrack.youtubeId}</p>
+                                            <a href={`https://www.youtube.com/watch?v=${currentTrack.youtubeId}`} target="_blank" className="text-xs border border-white/20 px-3 py-1 rounded-full text-white/50 hover:bg-white/10">Abrir no YouTube</a>
                                         </div>
                                     </div>
                                 ) : (
@@ -390,6 +311,7 @@
                                             <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
                                             <div className="absolute w-4 h-4 bg-white rounded-full"></div>
                                         </div>
+                                        <p className="absolute -bottom-10 w-full text-center text-gray-500 text-xs animate-pulse">Carregando YouTube...</p>
                                     </div>
                                 )}
                             </div>
@@ -397,7 +319,7 @@
                             <div className="p-8 pb-12 space-y-6 bg-black">
                                 <div className="flex justify-between items-end">
                                     <div><h2 className="text-2xl font-bold text-white mb-1">{currentTrack.title}</h2><p className={`text-lg ${theme.text}`}>{currentTrack.artist}</p></div>
-                                    <button onClick={() => toggleLike(currentTrack)}><Icons.Heart width={28} filled={isLiked} className={isLiked ? theme.text : "text-gray-400"} /></button>
+                                    <button><Icons.Heart width={28} className="text-gray-400" /></button>
                                 </div>
 
                                 <div className="flex justify-between items-center px-4 mt-4">
@@ -415,7 +337,7 @@
                         <div className="fixed bottom-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
                             {currentTrack && <div className="flex justify-between px-4 pb-3 border-b border-white/5 mb-2 cursor-pointer" onClick={() => setShowFullScreenPlayer(true)}>
                                 <div className="flex gap-3"><img src={currentTrack.artwork} className="w-10 h-10 rounded" /><div><p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p><p className="text-xs text-gray-500">{currentTrack.artist}</p></div></div>
-                                <div className="flex gap-4 items-center"><button onClick={(e)=>{e.stopPropagation();toggleLike(currentTrack)}}><Icons.Heart width={20} filled={isLiked} className={isLiked ? theme.text : "text-gray-500"} /></button><button onClick={(e)=>{e.stopPropagation();setIsPlaying(!isPlaying)}}>{isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}</button></div>
+                                <div className="flex gap-4 items-center"><button onClick={(e)=>{e.stopPropagation();setIsPlaying(!isPlaying)}}>{isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}</button></div>
                             </div>}
                             <div className="flex justify-around pb-2">
                                 <NavButton icon={Icons.Home} label="Início" active={view==='home'} onClick={()=>setView('home')} color={theme.text}/>
