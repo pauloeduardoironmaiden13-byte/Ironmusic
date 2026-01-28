@@ -82,7 +82,8 @@
 
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A"; 
         
-        const BACKEND_URL = ""; 
+        // SEU SERVIDOR NOVO:
+        const BACKEND_URL = "https://ironmusic-api.onrender.com"; 
 
         // Inicialização Firebase Segura e Seletiva
         let db = null;
@@ -220,15 +221,38 @@
             useEffect(() => {
                 if (!currentTrack) return;
                 
+                // Constrói a URL dependendo do modo
                 let audioSrc = "";
+                
                 if (currentTrack.isLocal) {
                     audioSrc = currentTrack.previewUrl;
                 } else if (sourceMode === 'preview') {
                     audioSrc = currentTrack.previewUrl;
                 } else if (sourceMode === 'full' && BACKEND_URL) {
-                    audioSrc = `${BACKEND_URL}/stream?url=${encodeURIComponent("https://www.youtube.com/watch?v=dQw4w9WgXcQ")}`; 
+                    // Mágica do Servidor: Manda o link do youtube, recebe o audio
+                    // Usamos uma busca simples pelo backend
+                    const query = encodeURIComponent(currentTrack.title + " " + currentTrack.artist + " audio");
+                    // A URL aqui depende de como você configurou o server.js
+                    // Se você usou o código que te passei com rota '/stream?url=...', precisamos achar o link primeiro.
+                    // Para facilitar, vamos assumir que o backend pode não ter busca interna.
+                    // Se o backend só aceita URL do youtube, o front teria que buscar o ID primeiro.
+                    // **CORREÇÃO PARA O SEU BACKEND**: O código server.js que passei espera "?url=LINK".
+                    // Como não temos o link exato, vamos tentar um truque ou voltar pro preview se falhar.
+                    // Se você quiser busca automática, o backend precisaria de uma lib de busca (ytsr).
+                    // POR ENQUANTO, para garantir funcionamento, se não tiver link direto, usamos preview.
+                    // *Se você melhorar o backend depois para aceitar busca, altere aqui.*
+                    
+                    // Como seu backend atual espera URL exata e não temos, vou manter o modo preview como padrão seguro 
+                    // a menos que seja arquivo local. 
+                    // Se você quiser testar com um link fixo para ver se funciona:
+                    // audioSrc = `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=dQw4w9WgXcQ`; // Teste
+                    
+                    // Voltando para preview por segurança já que o backend precisa de URL exata
+                    console.log("Backend configurado, mas requer URL exata. Usando preview.");
+                    audioSrc = currentTrack.previewUrl; 
                 }
 
+                // Troca o áudio se necessário
                 if (audioRef.current.src !== audioSrc && audioSrc) {
                     audioRef.current.src = audioSrc;
                     if (isPlaying) audioRef.current.play().catch(e => console.log("Play error (expected on mobile without gesture):", e));
@@ -507,7 +531,7 @@
                                         <img src={currentTrack.artwork} className="w-10 h-10 rounded" />
                                         <div>
                                             <p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p>
-                                            <p className="text-xs text-gray-500">{currentTrack.artist}</p>
+                                            <p className="text-xs text-gray-400 truncate">{currentTrack.artist}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 items-center">
