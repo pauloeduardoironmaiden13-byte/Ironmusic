@@ -116,11 +116,12 @@
             const [searchResults, setSearchResults] = useState([]);
             const [loading, setLoading] = useState(false);
             
-            // --- ESTRATÉGIA DE BUSCA DE VÍDEO ---
+            // --- ESTRATÉGIA DE BUSCA DE VÍDEO (REFORÇADA) ---
             // 0: lyrics (padrão)
-            // 1: audio
+            // 1: audio (oficial)
             // 2: visualizer
-            // 3: topic (oficial)
+            // 3: live 
+            // 4: cover
             const [searchVariant, setSearchVariant] = useState(0); 
             
             const [useLocalStorage, setUseLocalStorage] = useState(false);
@@ -198,9 +199,14 @@
             useEffect(() => {
                 if (currentTrack && youtubeRef.current && youtubeRef.current.contentWindow) {
                     const command = isPlaying ? 'playVideo' : 'pauseVideo';
-                    youtubeRef.current.contentWindow.postMessage(JSON.stringify({
-                        'event': 'command', 'func': command, 'args': []
-                    }), '*');
+                    // Pequeno delay para garantir que o iframe carregou
+                    setTimeout(() => {
+                        try {
+                            youtubeRef.current.contentWindow.postMessage(JSON.stringify({
+                                'event': 'command', 'func': command, 'args': []
+                            }), '*');
+                        } catch(e) {}
+                    }, 1000);
                 }
             }, [isPlaying, currentTrack]);
 
@@ -219,7 +225,7 @@
 
             // Tenta próxima variante de busca se o vídeo der erro
             const tryNextVideoVariant = () => {
-                setSearchVariant(prev => (prev + 1) % 4); // Cicla entre 0, 1, 2, 3
+                setSearchVariant(prev => (prev + 1) % 5); // Agora são 5 variantes
             };
 
             const searchMusic = async () => {
@@ -243,18 +249,18 @@
                 if (!currentTrack) return '';
                 
                 // Variantes de busca para "enganar" o bloqueio
-                let suffix = "lyrics";
+                let suffix = "lyrics"; // Tenta letra primeiro (mais seguro)
                 if (searchVariant === 1) suffix = "audio official";
                 if (searchVariant === 2) suffix = "visualizer";
-                if (searchVariant === 3) suffix = "topic"; // Canal oficial (às vezes funciona)
+                if (searchVariant === 3) suffix = "live"; // Ao vivo raramente é bloqueado
+                if (searchVariant === 4) suffix = "cover"; // Cover nunca é bloqueado
 
                 const term = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist} ${suffix}`);
                 
-                // IMPORTANTE: enablejsapi=1 e origin corretos
+                // MUDANÇA: Usando www.youtube.com que é mais estável para embeds oficiais
                 const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
                 
-                // Usando lista de busca para auto-play do primeiro resultado
-                return `https://www.youtube-nocookie.com/embed?listType=search&list=${term}&autoplay=1&playsinline=1&rel=0&enablejsapi=1${origin}`;
+                return `https://www.youtube.com/embed?listType=search&list=${term}&autoplay=1&playsinline=1&rel=0&enablejsapi=1${origin}`;
             };
 
             const getThemeData = () => {
@@ -410,12 +416,13 @@
                                 <div className="mt-4 z-20 flex gap-2">
                                     <button 
                                         onClick={tryNextVideoVariant} 
-                                        className="flex items-center gap-2 bg-white/10 border border-white/20 text-white px-4 py-2 rounded-full text-xs hover:bg-white/20 transition"
+                                        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full text-sm font-bold transition shadow-lg"
                                     >
-                                        <Icons.Refresh width={14} /> 
-                                        {searchVariant === 0 ? "Vídeo não carregou? Trocar Versão" : 
-                                         searchVariant === 1 ? "Tentando Versão Áudio..." :
-                                         searchVariant === 2 ? "Tentando Visualizer..." : "Tentando Versão Oficial..."}
+                                        <Icons.Refresh width={16} /> 
+                                        {searchVariant === 0 ? "Deu Erro? Trocar Vídeo" : 
+                                         searchVariant === 1 ? "Tentando Áudio Oficial..." :
+                                         searchVariant === 2 ? "Tentando Visualizer..." : 
+                                         searchVariant === 3 ? "Tentando Ao Vivo..." : "Tentando Cover..."}
                                     </button>
                                 </div>
                             </div>
