@@ -108,10 +108,11 @@
                 // Se já sabemos que a API está com erro, nem tenta (evita o 403)
                 if (isApiBroken) return null;
 
-                // Tenta uma busca mais ampla (remove "lyrics" para evitar erros em músicas sem letra oficial)
+                // Tenta uma busca mais ampla
                 const q = encodeURIComponent(`${title} ${artist}`);
                 try {
-                    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
+                    // ADICIONADO: videoEmbeddable=true para garantir que o vídeo pode tocar fora do YouTube
+                    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&videoEmbeddable=true&maxResults=1&key=${YOUTUBE_API_KEY}`);
                     
                     if (!res.ok) {
                         console.warn(`YouTube API Error ${res.status}. Switching to fallback mode.`);
@@ -174,15 +175,17 @@
 
             const getYoutubeEmbed = () => {
                 if (!currentTrack || !currentTrack.youtubeId) return '';
-                const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
+                
+                // Melhorando a captura da origem para evitar bloqueios de CORS/Embed
+                const origin = window.location.origin;
 
                 // Lógica de Fallback: Se não tem ID exato, usa a busca embedada
                 if (currentTrack.youtubeId === 'SEARCH_FALLBACK') {
                     const searchQuery = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist}`);
-                    return `https://www.youtube.com/embed?listType=search&list=${searchQuery}&autoplay=1${origin}`;
+                    return `https://www.youtube.com/embed?listType=search&list=${searchQuery}&autoplay=1&origin=${origin}`;
                 }
 
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1${origin}`;
+                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&origin=${origin}`;
             };
 
             const fetchGemini = async (t) => {
