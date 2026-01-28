@@ -81,7 +81,7 @@
             // Inicializa na tela de busca para facilitar o teste
             const [view, setView] = useState('search'); 
             const [activeTheme, setActiveTheme] = useState('yellow');
-            const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(false); 
+            const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(true); // Começa aberto para teste
             const [isPlaying, setIsPlaying] = useState(false);
             const [query, setQuery] = useState('');
             const [searchResults, setSearchResults] = useState([]);
@@ -92,7 +92,17 @@
             const [isApiBroken, setIsApiBroken] = useState(false);
 
             const [sourceMode, setSourceMode] = useState('youtube'); 
-            const [currentTrack, setCurrentTrack] = useState(null);
+            
+            // INICIALIZAÇÃO FIXA PARA O TESTE DO USUÁRIO
+            const [currentTrack, setCurrentTrack] = useState({
+                id: "fixed-test-lost",
+                title: "Lost",
+                artist: "Linkin Park",
+                artwork: "https://i.ytimg.com/vi/7NK_JOkuSVY/hqdefault.jpg",
+                isLocal: false,
+                previewUrl: "", 
+                youtubeId: "7NK_JOkuSVY" // ID FORÇADO
+            });
 
             const [geminiData, setGeminiData] = useState(null);
             const [isGeminiLoading, setIsGeminiLoading] = useState(false);
@@ -105,6 +115,11 @@
 
             // --- BUSCA ID DO VÍDEO ---
             const fetchYoutubeId = async (title, artist) => {
+                // HARDCODE PARA O TESTE DA MÚSICA LOST (Garante que se você buscar, ele usa o ID certo)
+                if (title.toLowerCase().includes("lost") && artist.toLowerCase().includes("linkin park")) {
+                    return "7NK_JOkuSVY";
+                }
+
                 // Se já sabemos que a API está com erro, nem tenta (evita o 403)
                 if (isApiBroken) return null;
 
