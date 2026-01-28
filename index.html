@@ -169,8 +169,6 @@
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
             
-            // source: 'preview' (iTunes) | 'full' (Server) | 'local' (Arquivo)
-            // INICIALIZA COMO 'full' se tiver backend, senão preview
             const [sourceMode, setSourceMode] = useState(BACKEND_URL ? 'full' : 'preview'); 
             const [audioLoading, setAudioLoading] = useState(false);
 
@@ -236,21 +234,36 @@
 
             // --- FUNÇÃO PARA PEGAR URL DO SERVER ---
             const getAudioLink = async (title, artist) => {
-                try {
-                    // Busca video ID no Piped (API pública do YouTube)
-                    const search = encodeURIComponent(`${title} ${artist} lyrics`);
-                    const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${search}&filter=music_songs`);
-                    const data = await res.json();
-                    if (data.items && data.items.length > 0) {
-                        const videoId = data.items[0].url.split('v=')[1];
-                        // Monta a URL para o SEU servidor processar o áudio
-                        return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
+                const search = encodeURIComponent(`${title} ${artist} lyrics`);
+                const apis = [
+                    `https://pipedapi.kavin.rocks/search?q=${search}&filter=music_songs`,
+                    `https://invidious.drgns.space/api/v1/search?q=${search}&type=video`,
+                    `https://vid.uff.email/api/v1/search?q=${search}&type=video`
+                ];
+
+                for (const api of apis) {
+                    try {
+                        const res = await fetch(api);
+                        if (!res.ok) continue;
+                        const data = await res.json();
+                        let videoId = null;
+                        
+                        // Adaptação para diferentes formatos de API (Piped vs Invidious)
+                        if (api.includes('piped') && data.items && data.items.length > 0) {
+                            videoId = data.items[0].url.split('v=')[1];
+                        } else if (data && data.length > 0 && data[0].videoId) {
+                            videoId = data[0].videoId;
+                        }
+
+                        if (videoId) {
+                            return `${BACKEND_URL}/stream?url=https://www.youtube.com/watch?v=${videoId}`;
+                        }
+                    } catch (e) {
+                        console.warn(`Erro na API ${api}:`, e);
+                        continue; // Tenta a próxima API
                     }
-                    return null;
-                } catch (e) {
-                    console.error("Erro ao buscar link:", e);
-                    return null;
                 }
+                return null;
             };
 
             // --- LÓGICA DE ÁUDIO ---
@@ -272,7 +285,7 @@
                         } else {
                             // Se falhar o servidor, avisa e usa preview
                             showToast("Servidor ocupado. Usando preview.");
-                            setSourceMode('preview');
+                            setSourceMode('preview'); // Fallback
                             src = currentTrack.previewUrl;
                             setAudioLoading(false);
                         }
