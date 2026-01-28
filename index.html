@@ -27,9 +27,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
 
     <style>
-        /* Correção de Zoom e Altura: Usar fixed inset-0 garante 100% da viewport real */
-        body { font-family: 'Inter', sans-serif; background-color: #000; color: white; -webkit-tap-highlight-color: transparent; overflow: hidden; position: fixed; inset: 0; }
-        #root { width: 100%; height: 100%; overflow: hidden; }
+        /* Ajuste CRÍTICO de Layout para 100% da tela visível */
+        body { font-family: 'Inter', sans-serif; background-color: #000; color: white; -webkit-tap-highlight-color: transparent; overflow: hidden; margin: 0; padding: 0; }
+        
+        #root { 
+            width: 100vw; 
+            height: 100dvh; /* Dynamic Viewport Height - Corrige corte em mobile */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
         
         h1, h2, h3, .rock-font { font-family: 'Oswald', sans-serif; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -48,32 +55,23 @@
         .vinyl-texture { background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px); }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        .toast { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #444; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 12px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; }
+        .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #444; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 12px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; }
         .toast.show { opacity: 1; }
 
-        /* Esconder visualmente, mas manter no DOM para funcionar o audio */
-        #youtube-player-container { 
-            position: fixed; 
-            top: -1000px; 
-            left: -1000px; 
-            width: 1px; 
-            height: 1px; 
-            opacity: 0.01; 
-            pointer-events: none;
-        }
-        
         /* Slider de tempo */
         input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; border-radius: 50%; background: #fff; margin-top: -4px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #444; border-radius: 2px; }
         
         .loader { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        
+        /* Container do YouTube visível */
+        .yt-container { width: 100%; height: 100%; pointer-events: none; } /* Pointer events none para não bloquear cliques se necessário, ou auto para interagir */
+        .yt-container.interactive { pointer-events: auto; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-    <!-- Container fora do React para a API do YouTube injetar o iframe -->
-    <div id="youtube-player-container"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -114,7 +112,8 @@
             ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>,
             ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>,
             Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-            Youtube: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
+            Youtube: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>,
+            ExternalLink: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         };
 
         function App() {
@@ -149,9 +148,7 @@
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
-            // ========================
-            // 1. INICIALIZAÇÃO YOUTUBE
-            // ========================
+            // 1. INICIALIZAÇÃO YOUTUBE (Global)
             useEffect(() => {
                 if (!window.YT) {
                     const tag = document.createElement('script');
@@ -161,20 +158,35 @@
                     
                     window.onYouTubeIframeAPIReady = () => {
                         console.log("YT API Ready");
-                        ytPlayer = new YT.Player('youtube-player-container', {
-                            height: '100%', 
-                            width: '100%',
-                            playerVars: { 
-                                'playsinline': 1, 
-                                'controls': 0, 
-                                'disablekb': 1, 
-                                'origin': window.location.origin 
-                            },
-                            events: { 'onStateChange': onPlayerStateChange, 'onError': onPlayerError }
-                        });
+                        // Não cria o player aqui, cria quando o componente renderizar a div
                     };
                 }
             }, []);
+
+            // Função para inicializar o player na div específica
+            const initPlayer = () => {
+                if (window.YT && window.YT.Player && !ytPlayer) {
+                    ytPlayer = new YT.Player('youtube-player-div', {
+                        height: '100%', width: '100%',
+                        playerVars: { 
+                            'playsinline': 1, 
+                            'controls': 0, // Controles escondidos, usamos os nossos
+                            'disablekb': 1, 
+                            'origin': window.location.origin,
+                            'iv_load_policy': 3 // Sem anotações
+                        },
+                        events: { 'onStateChange': onPlayerStateChange, 'onError': onPlayerError, 'onReady': onPlayerReady }
+                    });
+                }
+            };
+
+            const onPlayerReady = (event) => {
+                // Se já tiver uma track, toca
+                if (currentTrack && currentTrack.youtubeId && sourceMode === 'youtube') {
+                   event.target.loadVideoById(currentTrack.youtubeId);
+                   if (isPlaying) event.target.playVideo();
+                }
+            };
 
             const onPlayerStateChange = (event) => {
                 if (event.data === YT.PlayerState.PLAYING) {
@@ -192,7 +204,7 @@
 
             const onPlayerError = (event) => {
                 console.warn("Erro no Player YouTube:", event.data);
-                showToast("Vídeo restrito. Usando Preview.");
+                showToast("Vídeo restrito (Erro " + event.data + "). Trocando para Preview.");
                 setSourceMode('preview');
                 audioRef.current.src = currentTrack.previewUrl;
                 audioRef.current.play();
@@ -207,28 +219,47 @@
             };
             const stopProgressTimer = () => { if (progressInterval.current) clearInterval(progressInterval.current); };
 
+            // Auth Firebase
+            useEffect(() => { if (!isFirebaseDisabled && auth) auth.signInAnonymously().catch(()=>{ setUseLocalStorage(true); }); }, []);
 
-            // ========================
-            // 2. BUSCA DE ID
-            // ========================
+            // Load Data
+            useEffect(() => {
+                const loadLocal = (key, setter) => { try { const d = localStorage.getItem(key); if(d) setter(JSON.parse(d)); } catch(e){} };
+                if (!isFirebaseDisabled && db && !useLocalStorage) {
+                    try {
+                        db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d=>d.data())), () => loadLocal('iron_liked', setLikedSongs));
+                        db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d=>d.data())), () => loadLocal('iron_history', setHistory));
+                    } catch(e) { setUseLocalStorage(true); loadLocal('iron_liked', setLikedSongs); loadLocal('iron_history', setHistory); }
+                } else { loadLocal('iron_liked', setLikedSongs); loadLocal('iron_history', setHistory); }
+            }, [useLocalStorage]);
+
+            const toggleLike = (t) => {
+                const exists = likedSongs.find(s => s.title === t.title);
+                const newFavs = exists ? likedSongs.filter(s => s.title !== t.title) : [...likedSongs, t];
+                setLikedSongs(newFavs); localStorage.setItem('iron_liked', JSON.stringify(newFavs));
+                if(db && !useLocalStorage && !isFirebaseDisabled && !exists) db.collection('favorites').add(t).catch(()=>{});
+            }
+
+            const addToHistory = (t) => {
+                const h = [t, ...history.filter(x=>x.title!==t.title)].slice(0,10);
+                setHistory(h); localStorage.setItem('iron_history', JSON.stringify(h));
+                if(db && !useLocalStorage && !isFirebaseDisabled) db.collection('history').add(t).catch(()=>{});
+            }
+
+            // --- BUSCA DE ID ---
             const fetchVideoId = async (title, artist) => {
-                const queries = [`${title} ${artist} audio`, `${title} ${artist} lyrics`, `${title} ${artist}`];
-                
+                const q = `${title} ${artist}`; // Busca limpa
                 if (YOUTUBE_API_KEY && YOUTUBE_API_KEY !== "COLE_SUA_CHAVE_YOUTUBE_AQUI") {
-                    for (const q of queries) {
-                        try {
-                            const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(q)}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
-                            const data = await res.json();
-                            if (data.items && data.items.length > 0) return data.items[0].id.videoId;
-                        } catch(e) {}
-                    }
+                    try {
+                        const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(q)}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
+                        const data = await res.json();
+                        if (data.items && data.items.length > 0) return data.items[0].id.videoId;
+                    } catch(e) { console.error("API YT Erro", e); }
                 }
                 return null;
             };
 
-            // ========================
-            // 3. CONTROLE DE REPRODUÇÃO
-            // ========================
+            // --- PLAYER CONTROLLER ---
             const handlePlay = async (track) => {
                 if (currentTrack?.title === track.title) {
                     setShowFullScreenPlayer(true);
@@ -242,7 +273,7 @@
                 setDuration(0);
                 addToHistory(track);
 
-                // Stop previous audio
+                // Stop previous
                 audioRef.current.pause();
 
                 if (track.isLocal) {
@@ -253,25 +284,25 @@
                     return;
                 }
 
-                // Busca ID
                 let vid = track.youtubeId;
                 if (!vid) {
-                    showToast("Buscando no YouTube...");
+                    showToast("Buscando ID do vídeo...");
                     vid = await fetchVideoId(track.title, track.artist);
                     if (vid) setCurrentTrack(prev => ({...prev, youtubeId: vid}));
                 }
 
                 if (vid) {
                     setSourceMode('youtube');
-                    if (ytPlayer) {
-                        if (ytPlayer.loadVideoById) {
-                            // USANDO loadVideoById PARA GARANTIR EMBED CORRETO
-                            console.log("Carregando ID: ", vid);
+                    // Tenta inicializar/carregar player
+                    setTimeout(() => {
+                        if (!ytPlayer) initPlayer();
+                        if (ytPlayer && ytPlayer.loadVideoById) {
                             ytPlayer.loadVideoById(vid);
+                            ytPlayer.playVideo();
                         }
-                    }
+                    }, 100);
                 } else {
-                    showToast("Não encontrado. Preview.");
+                    showToast("ID não encontrado. Usando Preview.");
                     setSourceMode('preview');
                     audioRef.current.src = track.previewUrl;
                     audioRef.current.play();
@@ -280,13 +311,10 @@
             };
 
             const togglePlayPause = () => {
-                // Atualiza o estado PRIMEIRO para a UI reagir
                 const nextState = !isPlaying;
                 setIsPlaying(nextState);
 
-                if (sourceMode === 'youtube' && ytPlayer) {
-                    // Manda comando independente do estado interno do player, 
-                    // confiando na intenção do usuário
+                if (sourceMode === 'youtube' && ytPlayer && ytPlayer.getPlayerState) {
                     if (nextState) ytPlayer.playVideo();
                     else ytPlayer.pauseVideo();
                 } else {
@@ -302,7 +330,7 @@
                 else audioRef.current.currentTime = val;
             };
 
-            // Audio Nativo Listeners
+            // Audio Nativo Listener
             useEffect(() => {
                 const a = audioRef.current;
                 const upT = () => setCurrentTime(a.currentTime);
@@ -312,31 +340,6 @@
                 return () => { a.removeEventListener('timeupdate', upT); a.removeEventListener('loadedmetadata', upD); a.removeEventListener('ended', onE); };
             }, []);
 
-            // Firebase & LocalStorage Logic
-            useEffect(() => { if (!isFirebaseDisabled && auth) auth.signInAnonymously().catch(()=>{ setUseLocalStorage(true); }); }, []);
-            useEffect(() => {
-                const loadLocal = (k,s) => { try{s(JSON.parse(localStorage.getItem(k)||"[]"))}catch(e){} };
-                if (!isFirebaseDisabled && db && !useLocalStorage) {
-                    try {
-                        db.collection('favorites').onSnapshot(s => setLikedSongs(s.docs.map(d=>d.data())), () => loadLocal('iron_liked', setLikedSongs));
-                        db.collection('history').limit(20).onSnapshot(s => setHistory(s.docs.map(d=>d.data())), () => loadLocal('iron_history', setHistory));
-                    } catch(e) { setUseLocalStorage(true); loadLocal('iron_liked', setLikedSongs); loadLocal('iron_history', setHistory); }
-                } else { loadLocal('iron_liked', setLikedSongs); loadLocal('iron_history', setHistory); }
-            }, [useLocalStorage]);
-            
-            const addToHistory = (t) => {
-                if(db && !useLocalStorage && !isFirebaseDisabled) db.collection('history').add(t).catch(()=>{});
-                const h = [t, ...history.filter(x=>x.title!==t.title)].slice(0,10);
-                setHistory(h); localStorage.setItem('iron_history', JSON.stringify(h));
-            }
-            const toggleLike = (t) => {
-                const exists = likedSongs.find(s => s.title === t.title);
-                const newFavs = exists ? likedSongs.filter(s => s.title !== t.title) : [...likedSongs, t];
-                setLikedSongs(newFavs); localStorage.setItem('iron_liked', JSON.stringify(newFavs));
-                if(db && !useLocalStorage && !isFirebaseDisabled && !exists) db.collection('favorites').add(t).catch(()=>{});
-            }
-
-            // Search
             const searchMusic = async () => {
                 if (!query) return; setLoading(true);
                 try {
@@ -352,7 +355,6 @@
             const handleFileUpload = (e) => {
                 const f = e.target.files[0]; if(!f) return;
                 handlePlay({ id: Date.now(), title: f.name.replace(/\.[^/.]+$/, ""), artist: "Local", artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3", previewUrl: URL.createObjectURL(f), isLocal: true });
-                showToast("Arquivo carregado!");
             };
 
             const fetchGemini = async (t) => {
@@ -373,18 +375,12 @@
             const theme = activeTheme === 'purple' ? {spot:'theme-purple-spot', text:'text-purple-500'} : activeTheme === 'green' ? {spot:'theme-green-spot', text:'text-green-500'} : {spot:'theme-yellow-spot', text:'text-yellow-500'};
             const isLiked = currentTrack && likedSongs.some(s => s.title === currentTrack.title);
 
-            // URL Iframe (Para fallback ou visualização se necessário)
-            const getIframeUrl = () => {
-                if (!currentTrack || !currentTrack.youtubeId) return '';
-                const origin = window.location.protocol.startsWith('http') ? `&origin=${window.location.origin}` : '';
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1${origin}`;
-            };
-
             return (
-                <div className="h-full w-full fixed inset-0 flex flex-col bg-black text-white overflow-hidden">
+                <div className="h-full w-full flex flex-col bg-black text-white relative">
                     <div className={`gradient-spot ${theme.spot}`}></div>
                     <div className={`toast ${toastMsg ? 'show' : ''}`}>{toastMsg}</div>
 
+                    {/* HEADER */}
                     <div className="flex justify-between items-center p-4 pt-8 z-20 relative">
                         <h1 className="text-2xl font-bold tracking-tighter italic flex items-center gap-2">
                             IRON<span className={theme.text}>MUSIC</span>
@@ -394,15 +390,29 @@
                         </div>
                     </div>
 
+                    {/* LISTAS */}
                     <div className={`flex-1 overflow-y-auto pb-32 no-scrollbar p-4 z-10 ${showFullScreenPlayer ? 'hidden' : 'block'}`}>
                         {view === 'home' && (
                             <div className="space-y-6 animate-fade-in">
-                                <div><h2 className="text-xl font-bold mb-4 flex items-center gap-2"><span className={theme.text}>•</span> Favoritos <button onClick={()=>fileInputRef.current.click()} className="text-xs bg-white/10 px-2 py-1 rounded ml-auto flex gap-1"><Icons.Upload width={12}/> MP3</button><input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={handleFileUpload}/></h2>
-                                {likedSongs.length===0?<p className="text-white/40 text-sm text-center">Vazio.</p>:<div className="space-y-2">{likedSongs.map((t,i)=><div key={i} onClick={()=>handlePlay(t)} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg cursor-pointer"><img src={t.artwork} className="w-10 rounded"/><div className="flex-1"><p className="font-bold text-sm truncate">{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div></div>)}</div>}
+                                <div>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-xl font-bold flex items-center gap-2"><span className={theme.text}>•</span> Favoritos</h2>
+                                        <button onClick={() => fileInputRef.current.click()} className="text-xs bg-white/10 px-3 py-1 rounded-full flex gap-2"><Icons.Upload width={14}/> MP3</button>
+                                        <input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={handleFileUpload} />
+                                    </div>
+                                    {likedSongs.length === 0 ? <p className="text-white/40 text-sm text-center py-10">Nada aqui ainda.</p> : 
+                                        <div className="space-y-2">{likedSongs.map((t, i) => (
+                                            <div key={i} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer">
+                                                <img src={t.artwork} className="w-10 h-10 rounded" />
+                                                <div className="flex-1 overflow-hidden"><p className="font-bold truncate text-sm">{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div>
+                                                <Icons.Heart width={16} filled={true} className={theme.text} />
+                                            </div>
+                                        ))}</div>
+                                    }
                                 </div>
-                                {history.length>0 && <div className="mt-6"><h2 className="text-xl font-bold mb-4">• Recentes</h2><div className="grid grid-cols-2 gap-3">{history.map((t,i)=><div key={i} onClick={()=>handlePlay(t)} className="bg-white/5 p-3 rounded-lg"><p className="font-bold truncate text-xs">{t.title}</p><p className="text-[10px] text-gray-500 truncate">{t.artist}</p></div>)}</div></div>}
                             </div>
                         )}
+
                         {view === 'search' && (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="relative"><input type="text" placeholder="Buscar..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} /><div className="absolute left-4 top-4 text-gray-400"><Icons.Search width={20} /></div></div>
@@ -410,6 +420,7 @@
                                 <div className="space-y-2">{searchResults.map(t => <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer"><img src={t.artwork} className="w-12 h-12 rounded" /><div className="flex-1 overflow-hidden"><p className={`font-bold truncate ${currentTrack?.title === t.title ? theme.text : ''}`}>{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div></div>)}</div>
                             </div>
                         )}
+
                         {(view === 'chords' || view === 'lyrics') && (
                             <div className="animate-fade-in pb-20">
                                 {currentTrack ? (
@@ -426,26 +437,20 @@
                         )}
                     </div>
 
+                    {/* PLAYER FULL SCREEN */}
                     {showFullScreenPlayer && currentTrack && (
                         <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in">
                             <div className="flex justify-between items-center p-6 bg-black">
                                 <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
-                                <span className="text-xs tracking-widest text-gray-400">TOCANDO AGORA</span>
-                                <button><i className="fas fa-ellipsis-v text-xl"></i></button>
+                                <span className="text-xs uppercase tracking-widest text-gray-400">TOCANDO AGORA</span>
+                                <div className="w-8"></div>
                             </div>
                             
                             <div className="flex-1 w-full bg-black px-4 flex flex-col items-center justify-center relative">
                                 {sourceMode === 'youtube' && currentTrack.youtubeId ? (
-                                    /* VISUALIZAÇÃO TESTE: PLAYER YOUTUBE VISÍVEL */
+                                    /* DIV DO PLAYER YOUTUBE VISÍVEL */
                                     <div className="w-full aspect-video bg-black flex items-center justify-center rounded-lg overflow-hidden shadow-2xl border border-white/10">
-                                         <iframe 
-                                            width="100%" height="100%"
-                                            src={getIframeUrl()} 
-                                            title="YouTube Video" 
-                                            frameBorder="0" 
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                            allowFullScreen
-                                        />
+                                         <div id="youtube-player-div" className="w-full h-full"></div>
                                     </div>
                                 ) : (
                                     <div className="relative w-72 h-72 md:w-96 md:h-96">
@@ -455,11 +460,14 @@
                                         </div>
                                     </div>
                                 )}
+                                
+                                {sourceMode === 'preview' && <p className="mt-4 text-xs text-yellow-500 border border-yellow-500/30 px-3 py-1 rounded-full">Preview (Vídeo não encontrado)</p>}
+                                {currentTrack.youtubeId && sourceMode !== 'youtube' && <button onClick={() => setSourceMode('youtube')} className="mt-4 text-xs text-red-500 border border-red-500/30 px-3 py-1 rounded-full flex gap-1 items-center"><Icons.Youtube width={12}/> Ver Vídeo</button>}
                             </div>
 
                             <div className="p-8 pb-12 space-y-6 bg-black">
                                 <div className="flex justify-between items-end">
-                                    <div><h2 className="text-2xl font-bold text-white mb-1 truncate w-64">{currentTrack.title}</h2><p className={`text-lg ${theme.text}`}>{currentTrack.artist}</p></div>
+                                    <div><h2 className="text-xl font-bold text-white mb-1 truncate w-64">{currentTrack.title}</h2><p className={`text-sm ${theme.text}`}>{currentTrack.artist}</p></div>
                                     <button onClick={() => toggleLike(currentTrack)}><Icons.Heart width={28} filled={isLiked} className={isLiked ? theme.text : "text-gray-400"} /></button>
                                 </div>
 
@@ -479,6 +487,7 @@
                         </div>
                     )}
 
+                    {/* MINI PLAYER */}
                     {!showFullScreenPlayer && (
                         <div className="fixed bottom-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
                             {currentTrack && <div className="flex justify-between px-4 pb-3 border-b border-white/5 mb-2 cursor-pointer" onClick={() => setShowFullScreenPlayer(true)}>
