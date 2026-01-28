@@ -32,7 +32,7 @@
         
         #root { 
             width: 100vw; 
-            height: 100dvh; /* Dynamic Viewport Height - Corrige corte em mobile */
+            height: 100dvh; 
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -55,7 +55,7 @@
         .vinyl-texture { background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px); }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #444; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 12px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; }
+        .toast { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #444; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 12px; z-index: 100; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; }
         .toast.show { opacity: 1; }
 
         /* Slider de tempo */
@@ -65,13 +65,23 @@
         
         .loader { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         
-        /* Container do YouTube visível */
-        .yt-container { width: 100%; height: 100%; pointer-events: none; } /* Pointer events none para não bloquear cliques se necessário, ou auto para interagir */
-        .yt-container.interactive { pointer-events: auto; }
+        /* Container VISÍVEL do YouTube */
+        .yt-visible-wrapper { 
+            width: 100%; 
+            height: 100%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            overflow: hidden;
+            border-radius: 12px;
+            background: #000;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
+    <!-- O Player do YouTube será montado aqui -->
+    <div id="youtube-player-element" style="width: 100%; height: 100%;"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -120,15 +130,26 @@
             const [view, setView] = useState('home'); 
             const [activeTheme, setActiveTheme] = useState('yellow');
             const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(false); 
-            const [currentTrack, setCurrentTrack] = useState(null);
+            
+            // INICIALIZAÇÃO FIXA PARA O TESTE DO USUÁRIO
+            const [currentTrack, setCurrentTrack] = useState({
+                id: "fixed-test-snuff",
+                title: "Snuff",
+                artist: "Slipknot",
+                artwork: "https://i.ytimg.com/vi/cxGZj3xLzfI/hqdefault.jpg",
+                isLocal: false,
+                previewUrl: "", 
+                // ID do YouTube é a URL inteira neste caso específico
+                youtubeId: "https://www.youtube.com/watch?v=cxGZj3xLzfI&list=RDcxGZj3xLzfI&start_radio=1" 
+            });
             
             // Player
             const [isPlaying, setIsPlaying] = useState(false);
             const [currentTime, setCurrentTime] = useState(0);
             const [duration, setDuration] = useState(0);
-            const [sourceMode, setSourceMode] = useState('youtube'); // 'youtube' | 'local' | 'preview'
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
+            const [sourceMode, setSourceMode] = useState('youtube'); // Sempre tenta YouTube primeiro
 
             // Data
             const [history, setHistory] = useState([]);
@@ -145,11 +166,21 @@
             const audioRef = useRef(new Audio());
             const fileInputRef = useRef(null);
             const progressInterval = useRef(null);
+            const ytContainerRef = useRef(null); // Ref CORRETA para o container
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
+            // ========================
             // 1. INICIALIZAÇÃO YOUTUBE (Global)
+            // ========================
             useEffect(() => {
+                let playerDiv = document.getElementById('youtube-player-element');
+                if (!playerDiv) {
+                    playerDiv = document.createElement('div');
+                    playerDiv.id = 'youtube-player-element';
+                    document.body.appendChild(playerDiv);
+                }
+
                 if (!window.YT) {
                     const tag = document.createElement('script');
                     tag.src = "https://www.youtube.com/iframe_api";
@@ -158,33 +189,54 @@
                     
                     window.onYouTubeIframeAPIReady = () => {
                         console.log("YT API Ready");
-                        // Não cria o player aqui, cria quando o componente renderizar a div
+                        ytPlayer = new YT.Player('youtube-player-element', {
+                            height: '100%', 
+                            width: '100%',
+                            playerVars: { 
+                                'playsinline': 1, 
+                                'controls': 1, // Controles visíveis
+                                'disablekb': 1, 
+                                'origin': window.location.origin,
+                                'iv_load_policy': 3 // Sem anotações
+                            },
+                            events: { 'onStateChange': onPlayerStateChange, 'onError': onPlayerError, 'onReady': onPlayerReady }
+                        });
                     };
                 }
             }, []);
 
-            // Função para inicializar o player na div específica
-            const initPlayer = () => {
-                if (window.YT && window.YT.Player && !ytPlayer) {
-                    ytPlayer = new YT.Player('youtube-player-div', {
-                        height: '100%', width: '100%',
-                        playerVars: { 
-                            'playsinline': 1, 
-                            'controls': 0, // Controles escondidos, usamos os nossos
-                            'disablekb': 1, 
-                            'origin': window.location.origin,
-                            'iv_load_policy': 3 // Sem anotações
-                        },
-                        events: { 'onStateChange': onPlayerStateChange, 'onError': onPlayerError, 'onReady': onPlayerReady }
-                    });
+            // Efeito para mover o iframe para dentro do modal quando ele abre
+            useEffect(() => {
+                const playerEl = document.getElementById('youtube-player-element') || document.querySelector('#youtube-player-element iframe');
+                if (playerEl) {
+                    // Verifica se o container (ytContainerRef) está disponível (tela cheia aberta) e se é modo youtube
+                    if (showFullScreenPlayer && sourceMode === 'youtube' && ytContainerRef.current) {
+                        playerEl.style.position = 'relative';
+                        playerEl.style.top = '0';
+                        playerEl.style.left = '0';
+                        playerEl.style.width = '100%';
+                        playerEl.style.height = '100%';
+                        playerEl.style.opacity = '1';
+                        playerEl.style.pointerEvents = 'auto'; // Garante cliques
+                        ytContainerRef.current.appendChild(playerEl);
+                    } else {
+                        // Esconde fora da tela (mas não remove do DOM)
+                        playerEl.style.position = 'fixed';
+                        playerEl.style.top = '-9999px';
+                        playerEl.style.opacity = '0';
+                        playerEl.style.pointerEvents = 'none';
+                        document.body.appendChild(playerEl); 
+                    }
                 }
-            };
+            }, [showFullScreenPlayer, sourceMode]);
 
             const onPlayerReady = (event) => {
-                // Se já tiver uma track, toca
                 if (currentTrack && currentTrack.youtubeId && sourceMode === 'youtube') {
-                   event.target.loadVideoById(currentTrack.youtubeId);
-                   if (isPlaying) event.target.playVideo();
+                   if (currentTrack.youtubeId.includes('http')) {
+                       event.target.loadVideoByUrl(currentTrack.youtubeId);
+                   } else {
+                       event.target.loadVideoById(currentTrack.youtubeId);
+                   }
                 }
             };
 
@@ -207,7 +259,11 @@
                 showToast("Vídeo restrito (Erro " + event.data + "). Trocando para Preview.");
                 setSourceMode('preview');
                 audioRef.current.src = currentTrack.previewUrl;
-                audioRef.current.play();
+                // Adicionado catch para evitar erro de promise não tratada
+                audioRef.current.play().catch(e => {
+                    console.log("Autoplay preview bloqueado", e);
+                    setIsPlaying(false);
+                });
                 setIsPlaying(true);
             };
 
@@ -232,7 +288,12 @@
                     } catch(e) { setUseLocalStorage(true); loadLocal('iron_liked', setLikedSongs); loadLocal('iron_history', setHistory); }
                 } else { loadLocal('iron_liked', setLikedSongs); loadLocal('iron_history', setHistory); }
             }, [useLocalStorage]);
-
+            
+            const addToHistory = (t) => {
+                const h = [t, ...history.filter(x=>x.title!==t.title)].slice(0,10);
+                setHistory(h); localStorage.setItem('iron_history', JSON.stringify(h));
+                if(db && !useLocalStorage && !isFirebaseDisabled) db.collection('history').add(t).catch(()=>{});
+            }
             const toggleLike = (t) => {
                 const exists = likedSongs.find(s => s.title === t.title);
                 const newFavs = exists ? likedSongs.filter(s => s.title !== t.title) : [...likedSongs, t];
@@ -240,15 +301,14 @@
                 if(db && !useLocalStorage && !isFirebaseDisabled && !exists) db.collection('favorites').add(t).catch(()=>{});
             }
 
-            const addToHistory = (t) => {
-                const h = [t, ...history.filter(x=>x.title!==t.title)].slice(0,10);
-                setHistory(h); localStorage.setItem('iron_history', JSON.stringify(h));
-                if(db && !useLocalStorage && !isFirebaseDisabled) db.collection('history').add(t).catch(()=>{});
-            }
-
             // --- BUSCA DE ID ---
             const fetchVideoId = async (title, artist) => {
-                const q = `${title} ${artist}`; // Busca limpa
+                // HARDCODE PARA TESTE (Como solicitado)
+                if (title.toLowerCase().includes("snuff") || artist.toLowerCase().includes("slipknot")) {
+                    return "https://www.youtube.com/watch?v=cxGZj3xLzfI&list=RDcxGZj3xLzfI&start_radio=1";
+                }
+
+                const q = `${title} ${artist}`; 
                 if (YOUTUBE_API_KEY && YOUTUBE_API_KEY !== "COLE_SUA_CHAVE_YOUTUBE_AQUI") {
                     try {
                         const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(q)}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
@@ -266,27 +326,33 @@
                     return;
                 }
 
+                // Reset Total
+                if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+                audioRef.current.pause();
+                
                 setCurrentTrack(track);
                 setShowFullScreenPlayer(true);
                 setIsPlaying(false);
                 setCurrentTime(0);
                 setDuration(0);
+                setSourceMode('youtube'); 
                 addToHistory(track);
-
-                // Stop previous
-                audioRef.current.pause();
 
                 if (track.isLocal) {
                     setSourceMode('local');
                     audioRef.current.src = track.previewUrl;
-                    audioRef.current.play();
+                    audioRef.current.play().catch(e => {
+                         console.log("Local audio autoplay blocked", e);
+                         setIsPlaying(false);
+                    });
                     setIsPlaying(true);
                     return;
                 }
 
+                // Busca ID
                 let vid = track.youtubeId;
                 if (!vid) {
-                    showToast("Buscando ID do vídeo...");
+                    showToast("Buscando no YouTube...");
                     vid = await fetchVideoId(track.title, track.artist);
                     if (vid) setCurrentTrack(prev => ({...prev, youtubeId: vid}));
                 }
@@ -295,17 +361,21 @@
                     setSourceMode('youtube');
                     // Tenta inicializar/carregar player
                     setTimeout(() => {
-                        if (!ytPlayer) initPlayer();
-                        if (ytPlayer && ytPlayer.loadVideoById) {
-                            ytPlayer.loadVideoById(vid);
-                            ytPlayer.playVideo();
+                        if (ytPlayer) {
+                             if (vid.includes('http')) {
+                                // URL COMPLETA (WATCH?V=...)
+                                ytPlayer.loadVideoByUrl(vid);
+                            } else {
+                                // ID SIMPLES
+                                ytPlayer.loadVideoById(vid);
+                            }
                         }
                     }, 100);
                 } else {
                     showToast("ID não encontrado. Usando Preview.");
                     setSourceMode('preview');
                     audioRef.current.src = track.previewUrl;
-                    audioRef.current.play();
+                    audioRef.current.play().catch(e => setIsPlaying(false));
                     setIsPlaying(true);
                 }
             };
@@ -318,7 +388,7 @@
                     if (nextState) ytPlayer.playVideo();
                     else ytPlayer.pauseVideo();
                 } else {
-                    if (nextState) audioRef.current.play();
+                    if (nextState) audioRef.current.play().catch(() => setIsPlaying(false));
                     else audioRef.current.pause();
                 }
             };
@@ -355,6 +425,7 @@
             const handleFileUpload = (e) => {
                 const f = e.target.files[0]; if(!f) return;
                 handlePlay({ id: Date.now(), title: f.name.replace(/\.[^/.]+$/, ""), artist: "Local", artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3", previewUrl: URL.createObjectURL(f), isLocal: true });
+                showToast("Arquivo carregado!");
             };
 
             const fetchGemini = async (t) => {
@@ -375,12 +446,18 @@
             const theme = activeTheme === 'purple' ? {spot:'theme-purple-spot', text:'text-purple-500'} : activeTheme === 'green' ? {spot:'theme-green-spot', text:'text-green-500'} : {spot:'theme-yellow-spot', text:'text-yellow-500'};
             const isLiked = currentTrack && likedSongs.some(s => s.title === currentTrack.title);
 
+            // Forçar abertura do player no inicio para teste (apenas a primeira vez)
+            useEffect(() => {
+               if(currentTrack && currentTrack.id === "fixed-test-snuff") {
+                   handlePlay(currentTrack);
+               }
+            }, []);
+
             return (
                 <div className="h-full w-full flex flex-col bg-black text-white relative">
                     <div className={`gradient-spot ${theme.spot}`}></div>
                     <div className={`toast ${toastMsg ? 'show' : ''}`}>{toastMsg}</div>
 
-                    {/* HEADER */}
                     <div className="flex justify-between items-center p-4 pt-8 z-20 relative">
                         <h1 className="text-2xl font-bold tracking-tighter italic flex items-center gap-2">
                             IRON<span className={theme.text}>MUSIC</span>
@@ -390,7 +467,6 @@
                         </div>
                     </div>
 
-                    {/* LISTAS */}
                     <div className={`flex-1 overflow-y-auto pb-32 no-scrollbar p-4 z-10 ${showFullScreenPlayer ? 'hidden' : 'block'}`}>
                         {view === 'home' && (
                             <div className="space-y-6 animate-fade-in">
@@ -409,15 +485,26 @@
                                             </div>
                                         ))}</div>
                                     }
+                                    {history.length > 0 && <div className="mt-8"><h2 className="text-xl font-bold mb-4">• Recentes</h2>
+                                        <div className="grid grid-cols-2 gap-3">{history.map((t,i) => <div key={i} onClick={() => handlePlay(t)} className="bg-white/5 p-3 rounded-lg"><p className="font-bold truncate text-xs">{t.title}</p><p className="text-[10px] text-gray-500 truncate">{t.artist}</p></div>)}</div>
+                                    </div>}
                                 </div>
                             </div>
                         )}
 
                         {view === 'search' && (
                             <div className="space-y-4 animate-fade-in">
-                                <div className="relative"><input type="text" placeholder="Buscar..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} /><div className="absolute left-4 top-4 text-gray-400"><Icons.Search width={20} /></div></div>
+                                <div className="relative">
+                                    <input type="text" placeholder="Buscar..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} />
+                                    <div className="absolute left-4 top-4 text-gray-400"><Icons.Search width={20} /></div>
+                                </div>
                                 {loading && <div className="loader mx-auto"></div>}
-                                <div className="space-y-2">{searchResults.map(t => <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer"><img src={t.artwork} className="w-12 h-12 rounded" /><div className="flex-1 overflow-hidden"><p className={`font-bold truncate ${currentTrack?.title === t.title ? theme.text : ''}`}>{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div></div>)}</div>
+                                <div className="space-y-2">{searchResults.map(t => (
+                                    <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer">
+                                        <img src={t.artwork} className="w-12 h-12 rounded" />
+                                        <div className="flex-1 overflow-hidden"><p className={`font-bold truncate ${currentTrack?.title === t.title ? theme.text : ''}`}>{t.title}</p><p className="text-xs text-gray-400">{t.artist}</p></div>
+                                    </div>
+                                ))}</div>
                             </div>
                         )}
 
@@ -431,28 +518,27 @@
                                             view === 'chords' ? <div className="bg-white/5 p-4 rounded-lg font-mono text-xs text-yellow-200 whitespace-pre-wrap">{geminiData.chords}<hr className="my-4 border-white/10"/><div className="text-green-300">{geminiData.tabs}</div></div> :
                                             <div className="space-y-6"><div className="text-gray-200 whitespace-pre-line text-sm">{geminiData.original_lyrics}</div><div className="border-t border-white/10 pt-4 text-gray-400 whitespace-pre-line text-sm italic">{geminiData.translated_lyrics}</div></div>
                                         )}
+                                        {!currentTrack && <p className="text-center text-gray-500">Selecione uma música</p>}
                                     </div>
                                 ) : <p className="text-center text-gray-500 py-20">Selecione uma música</p>}
                             </div>
                         )}
                     </div>
 
-                    {/* PLAYER FULL SCREEN */}
                     {showFullScreenPlayer && currentTrack && (
                         <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in">
                             <div className="flex justify-between items-center p-6 bg-black">
                                 <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
                                 <span className="text-xs uppercase tracking-widest text-gray-400">TOCANDO AGORA</span>
-                                <div className="w-8"></div>
+                                <button><i className="fas fa-ellipsis-v text-xl"></i></button>
                             </div>
                             
                             <div className="flex-1 w-full bg-black px-4 flex flex-col items-center justify-center relative">
                                 {sourceMode === 'youtube' && currentTrack.youtubeId ? (
-                                    /* DIV DO PLAYER YOUTUBE VISÍVEL */
-                                    <div className="w-full aspect-video bg-black flex items-center justify-center rounded-lg overflow-hidden shadow-2xl border border-white/10">
-                                         <div id="youtube-player-div" className="w-full h-full"></div>
-                                    </div>
+                                    /* CONTAINER QUE RECEBE O IFRAME */
+                                    <div ref={ytContainerRef} className="yt-visible-wrapper"></div>
                                 ) : (
+                                    /* VISUAL VINIL (Preview/Local) */
                                     <div className="relative w-72 h-72 md:w-96 md:h-96">
                                         <div className={`w-full h-full rounded-full bg-black shadow-2xl flex items-center justify-center border-4 border-[#1a1a1a] vinyl-texture ${isPlaying ? 'vinyl-spin' : 'vinyl-spin vinyl-paused'}`}>
                                             <img src={currentTrack.artwork} className="w-2/3 h-2/3 rounded-full object-cover border-4 border-black" />
@@ -461,8 +547,11 @@
                                     </div>
                                 )}
                                 
-                                {sourceMode === 'preview' && <p className="mt-4 text-xs text-yellow-500 border border-yellow-500/30 px-3 py-1 rounded-full">Preview (Vídeo não encontrado)</p>}
-                                {currentTrack.youtubeId && sourceMode !== 'youtube' && <button onClick={() => setSourceMode('youtube')} className="mt-4 text-xs text-red-500 border border-red-500/30 px-3 py-1 rounded-full flex gap-1 items-center"><Icons.Youtube width={12}/> Ver Vídeo</button>}
+                                {/* Botão de Troca Manual */}
+                                {currentTrack.youtubeId && sourceMode !== 'youtube' && (
+                                    <button onClick={() => setSourceMode('youtube')} className="mt-4 px-4 py-2 bg-red-600 rounded-full text-xs flex gap-2 items-center z-20"><Icons.Youtube width={14}/> Ver Vídeo</button>
+                                )}
+                                {sourceMode === 'preview' && <p className="mt-2 text-xs text-yellow-500">Modo Preview (30s)</p>}
                             </div>
 
                             <div className="p-8 pb-12 space-y-6 bg-black">
@@ -472,7 +561,7 @@
                                 </div>
 
                                 <div className="w-full mt-4">
-                                    <input type="range" min="0" max={duration || 100} value={currentTime} onChange={handleSeek} />
+                                    <input type="range" min="0" max={duration || 100} value={currentTime} onChange={handleSeek} className="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer" style={{accentColor: "white"}} />
                                     <div className="flex justify-between text-xs text-gray-500 mt-1"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
                                 </div>
 
@@ -487,7 +576,6 @@
                         </div>
                     )}
 
-                    {/* MINI PLAYER */}
                     {!showFullScreenPlayer && (
                         <div className="fixed bottom-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
                             {currentTrack && <div className="flex justify-between px-4 pb-3 border-b border-white/5 mb-2 cursor-pointer" onClick={() => setShowFullScreenPlayer(true)}>
