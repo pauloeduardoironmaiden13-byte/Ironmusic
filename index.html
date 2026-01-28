@@ -176,16 +176,25 @@
             const getYoutubeEmbed = () => {
                 if (!currentTrack || !currentTrack.youtubeId) return '';
                 
-                // Melhorando a captura da origem para evitar bloqueios de CORS/Embed
-                const origin = window.location.origin;
-
-                // Lógica de Fallback: Se não tem ID exato, usa a busca embedada
-                if (currentTrack.youtubeId === 'SEARCH_FALLBACK') {
-                    const searchQuery = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist}`);
-                    return `https://www.youtube.com/embed?listType=search&list=${searchQuery}&autoplay=1&origin=${origin}`;
+                // Configuração robusta de URL
+                // Se estiver rodando localmente (file://) ou sem HTTPS, evitamos enablejsapi
+                // pois o YouTube bloqueia o vídeo por segurança se a origem for inválida
+                const isSecureOrigin = window.location.protocol.startsWith('http');
+                
+                let params = `autoplay=1&playsinline=1&rel=0&iv_load_policy=3`;
+                
+                if (isSecureOrigin) {
+                    // Só ativa API JS se a origem for segura, senão o vídeo não carrega
+                    params += `&enablejsapi=1&origin=${window.location.origin}`;
                 }
 
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&origin=${origin}`;
+                // Lógica de Fallback
+                if (currentTrack.youtubeId === 'SEARCH_FALLBACK') {
+                    const searchQuery = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist}`);
+                    return `https://www.youtube.com/embed?listType=search&list=${searchQuery}&${params}`;
+                }
+
+                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params}`;
             };
 
             const fetchGemini = async (t) => {
@@ -311,7 +320,7 @@
                                                 src={getYoutubeEmbed()} 
                                                 title="YouTube Video" 
                                                 frameBorder="0" 
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                                                 allowFullScreen
                                             />
                                         </div>
