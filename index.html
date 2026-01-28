@@ -88,6 +88,9 @@
             const [loading, setLoading] = useState(false);
             const [toastMsg, setToastMsg] = useState('');
             
+            // Estado para controlar se a API está quebrada (Cota excedida/Erro)
+            const [isApiBroken, setIsApiBroken] = useState(false);
+
             const [sourceMode, setSourceMode] = useState('youtube'); 
             const [currentTrack, setCurrentTrack] = useState(null);
 
@@ -102,12 +105,16 @@
 
             // --- BUSCA ID DO VÍDEO ---
             const fetchYoutubeId = async (title, artist) => {
+                // Se já sabemos que a API está com erro, nem tenta (evita o 403)
+                if (isApiBroken) return null;
+
                 const q = encodeURIComponent(`${title} ${artist} lyrics`);
                 try {
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&maxResults=1&key=${YOUTUBE_API_KEY}`);
                     
                     if (!res.ok) {
-                        console.error("Erro API YT status:", res.status);
+                        console.warn(`YouTube API Error ${res.status}. Switching to fallback mode.`);
+                        setIsApiBroken(true); // Marca a API como indisponível
                         return null; 
                     }
 
@@ -115,7 +122,10 @@
                     if (data.items && data.items.length > 0) {
                         return data.items[0].id.videoId;
                     }
-                } catch(e) { console.error("Erro YT API", e); }
+                } catch(e) { 
+                    console.warn("Erro YT API", e); 
+                    setIsApiBroken(true);
+                }
                 return null;
             };
 
@@ -143,9 +153,8 @@
                             // Se achou, usa o ID
                             setCurrentTrack(prev => ({ ...prev, youtubeId: vid }));
                         } else {
-                            // Se NÃO achou (erro de API ou não encontrado), 
+                            // Se NÃO achou ou deu erro (API quebrada), 
                             // define um ID especial para ativar o "Modo de Busca Embed"
-                            // Isso garante que a tela do YouTube apareça de qualquer jeito.
                             setCurrentTrack(prev => ({ ...prev, youtubeId: 'SEARCH_FALLBACK' }));
                         }
                         return; 
@@ -266,7 +275,7 @@
                             <div className="animate-fade-in pb-20">
                                 {currentTrack ? (
                                     <div className="space-y-4">
-                                        <div className="flex gap-4 border-b border-white/10 pb-4"><img src={currentTrack.artwork} className="w-16 h-16 rounded shadow-lg" /><div><h2 className="text-xl font-bold">{currentTrack.title}</h2><p className={theme.text}>{currentTrack.artist}</p></div></div>
+                                        <div className="flex gap-4 border-b border-white/10 pb-4"><img src={currentTrack.artwork} className="w-16 h-16 rounded shadow-lg" /><div><h2 className="text-xl font-bold">{currentTrack.title}</h2><p className="text-xs text-gray-500">{currentTrack.artist}</p></div></div>
                                         {isGeminiLoading && <div className="loader mx-auto"></div>}
                                         {!isGeminiLoading && geminiData && (
                                             view === 'chords' ? <div className="bg-white/5 p-4 rounded-lg font-mono text-xs text-yellow-200 whitespace-pre-wrap">{geminiData.chords}<hr className="my-4 border-white/10"/><div className="text-green-300">{geminiData.tabs}</div></div> :
