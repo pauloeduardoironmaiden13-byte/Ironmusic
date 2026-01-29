@@ -342,9 +342,18 @@
             // Formulário Admin
             const [adminForm, setAdminForm] = useState({ title: '', artist: '', youtubeId: '' });
 
+            // NOVOS ESTADOS - Player Avançado
+            const [musicLibrary, setMusicLibrary] = useState([]); // Biblioteca completa do Firebase
+            const [currentIndex, setCurrentIndex] = useState(0); // Índice da música atual na biblioteca
+            const [currentTime, setCurrentTime] = useState(0); // Tempo atual em segundos
+            const [duration, setDuration] = useState(0); // Duração total
+            const [volume, setVolume] = useState(100); // Volume 0-100
+            const [isMuted, setIsMuted] = useState(false);
+
             const audioRef = useRef(new Audio());
             const youtubeRef = useRef(null);
             const fileInputRef = useRef(null);
+            const viaCristaisAudioRef = useRef(new Audio()); // Áudio personalizado
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
@@ -510,8 +519,133 @@
                     addDebugLog('🚀 Iniciando IronMusic...', 'info');
                     addDebugLog(`🔥 Firebase: ${isFirebaseActive ? 'CONECTADO' : 'DESCONECTADO'}`, isFirebaseActive ? 'success' : 'error');
                     loadFirebaseStats();
+                    loadMusicLibrary(); // Carrega biblioteca completa
                 }
             }, []);
+
+            // --- FUNÇÕES DO PLAYER AVANÇADO ---
+
+            // Carrega biblioteca completa do Firebase
+            const loadMusicLibrary = async () => {
+                if (!isFirebaseActive || !db) return;
+                try {
+                    const snapshot = await db.collection('song_cache').orderBy('createdAt', 'desc').get();
+                    const songs = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        songs.push({
+                            id: doc.id,
+                            ...data,
+                            // Adiciona URL da artwork se não tiver
+                            artwork: data.artwork || 'https://via.placeholder.com/300/000000/FFFFFF?text=MP3'
+                        });
+                    });
+                    setMusicLibrary(songs);
+                    addDebugLog(`📚 ${songs.length} músicas na biblioteca`, 'info');
+                } catch (e) {
+                    addDebugLog(`❌ Erro ao carregar biblioteca: ${e.message}`, 'error');
+                }
+            };
+
+            // Deletar música do Firebase
+            const deleteSongFromFirebase = async (song) => {
+                if (!confirm(`Deletar "${song.title}" - ${song.artist}?`)) return;
+
+                try {
+                    addDebugLog(`🗑️ Deletando: ${song.title}`, 'warn');
+
+                    // Remove do Firebase
+                    await db.collection('song_cache').doc(song.id).delete();
+
+                    // Remove do LocalStorage
+                    localStorage.removeItem(song.id);
+
+                    showToast('🗑️ Música deletada!');
+                    addDebugLog(`✅ Deletado: ${song.id}`, 'success');
+
+                    // Recarrega biblioteca
+                    loadMusicLibrary();
+                    loadFirebaseStats();
+                } catch (e) {
+                    showToast(`❌ Erro ao deletar: ${e.message}`);
+                    addDebugLog(`❌ Erro: ${e.message}`, 'error');
+                }
+            };
+
+            // Função para tocar áudio "Via Cristais"
+            const playViaCristaisAudio = () => {
+                const synth = window.speechSynthesis;
+                const utterance = new SpeechSynthesisUtterance('Via Cristais. Nosso objetivo é deixar o seu caminho seguro.');
+                utterance.lang = 'pt-BR';
+                utterance.rate = 0.9; // Velocidade
+                utterance.pitch = 1.0; // Tom
+                utterance.volume = volume / 100; // Volume baseado no slider
+
+                synth.speak(utterance);
+                addDebugLog('🔊 Via Cristais - Áudio tocando', 'info');
+
+                return utterance;
+            };
+
+            // Navegar para próxima música
+            const playNext = () => {
+                if (musicLibrary.length === 0) return;
+
+                const nextIndex = (currentIndex + 1) % musicLibrary.length;
+                setCurrentIndex(nextIndex);
+
+                const nextSong = musicLibrary[nextIndex];
+                handlePlay(nextSong);
+                addDebugLog(`⏭️ Próxima: ${nextSong.title}`, 'info');
+            };
+
+            // Navegar para música anterior
+            const playPrevious = () => {
+                if (musicLibrary.length === 0) return;
+
+                const prevIndex = currentIndex === 0 ? musicLibrary.length - 1 : currentIndex - 1;
+                setCurrentIndex(prevIndex);
+
+                const prevSong = musicLibrary[prevIndex];
+                handlePlay(prevSong);
+                addDebugLog(`⏮️ Anterior: ${prevSong.title}`, 'info');
+            };
+
+            // Controle de volume
+            const handleVolumeChange = (newVolume) => {
+                setVolume(newVolume);
+                if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                    try {
+                        youtubeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ event: 'command', func: 'setVolume', args: [newVolume] }), '*'
+                        );
+                    } catch (e) { }
+                }
+                if (audioRef.current) {
+                    audioRef.current.volume = newVolume / 100;
+                }
+            };
+
+            // Toggle mute
+            const toggleMute = () => {
+                const newMuted = !isMuted;
+                setIsMuted(newMuted);
+
+                if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                    try {
+                        const func = newMuted ? 'mute' : 'unMute';
+                        youtubeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ event: 'command', func }), '*'
+                        );
+
+                        // Se mutou, toca o áudio Via Cristais
+                        if (newMuted) {
+                            playViaCristaisAudio();
+                        }
+                    } catch (e) { }
+                }
+            };
+
 
 
             // --- LÓGICA DE PLAYER ---
@@ -642,9 +776,53 @@
 
                     <div className={`flex-1 overflow-y-auto pb-32 no-scrollbar p-4 z-10 ${showFullScreenPlayer ? 'hidden' : 'block'}`}>
                         {view === 'home' && (
-                            <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                                <p className="text-gray-400">Para testar, vá para a aba Buscar.</p>
-                                <button onClick={() => setView('search')} className={`bg-white/10 px-6 py-3 rounded-full font-bold ${theme.text}`}>Ir para Busca</button>
+                            <div className="space-y-4 animate-fade-in">
+                                <h2 className="text-2xl font-bold mb-4">📚 Minha Biblioteca</h2>
+
+                                {musicLibrary.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                                        <i className="fas fa-music text-6xl text-gray-600"></i>
+                                        <p className="text-gray-400">Nenhuma música salva ainda</p>
+                                        <button onClick={() => setView('search')} className={`bg-white/10 px-6 py-3 rounded-full font-bold ${theme.text}`}>
+                                            Buscar Músicas
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="grid gap-3">
+                                        {musicLibrary.map((song, idx) => (
+                                            <div key={song.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition group">
+                                                <img src={song.artwork} className="w-16 h-16 rounded object-cover shadow-lg" alt={song.title} />
+                                                <div className="flex-1 overflow-hidden">
+                                                    <p className="font-bold truncate text-white">{song.title}</p>
+                                                    <p className="text-xs text-gray-400 truncate">{song.artist}</p>
+                                                    <p className="text-[10px] text-gray-600 font-mono">{song.youtubeId}</p>
+                                                </div>
+                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                                                    <button
+                                                        onClick={() => {
+                                                            setCurrentIndex(idx);
+                                                            handlePlay(song);
+                                                        }}
+                                                        className="bg-white/10 hover:bg-white/20 p-2 rounded-full"
+                                                        title="Tocar"
+                                                    >
+                                                        <i className="fas fa-play text-sm"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            deleteSongFromFirebase(song);
+                                                        }}
+                                                        className="bg-red-500/20 hover:bg-red-500/30 p-2 rounded-full text-red-400"
+                                                        title="Deletar"
+                                                    >
+                                                        <i className="fas fa-trash text-sm"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -741,12 +919,36 @@
                                     <button><Icons.Heart width={28} className="text-gray-400" /></button>
                                 </div>
 
-                                <div className="flex justify-between items-center px-4 mt-4">
-                                    <button><Icons.SkipBack width={32} /></button>
+                                {/* Controles de Reprodução */}
+                                <div className="flex justify-between items-center px-4 mt-6">
+                                    <button onClick={playPrevious} className="text-white/70 hover:text-white transition" disabled={musicLibrary.length === 0}>
+                                        <Icons.SkipBack width={32} />
+                                    </button>
                                     <button onClick={() => setIsPlaying(!isPlaying)} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
                                         {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} />}
                                     </button>
-                                    <button><Icons.Skip width={32} /></button>
+                                    <button onClick={playNext} className="text-white/70 hover:text-white transition" disabled={musicLibrary.length === 0}>
+                                        <Icons.Skip width={32} />
+                                    </button>
+                                </div>
+
+                                {/* Controle de Volume */}
+                                <div className="flex items-center gap-3 px-8 mt-4">
+                                    <button onClick={toggleMute} className="text-white/70 hover:text-white">
+                                        <i className={`fas ${isMuted ? 'fa-volume-mute' : volume > 50 ? 'fa-volume-up' : 'fa-volume-down'} text-xl`}></i>
+                                    </button>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        value={volume}
+                                        onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                                        className="flex-1 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                                        style={{
+                                            background: `linear-gradient(to right, white ${volume}%, rgba(255,255,255,0.2) ${volume}%)`
+                                        }}
+                                    />
+                                    <span className="text-xs text-white/50 w-8 text-right">{volume}%</span>
                                 </div>
                             </div>
                         </div>
