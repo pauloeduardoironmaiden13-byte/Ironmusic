@@ -124,6 +124,53 @@
         .toast.show {
             opacity: 1;
         }
+
+        .admin-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.2s;
+        }
+
+        .debug-console {
+            position: fixed;
+            bottom: 80px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 10px;
+            max-width: 300px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 10px;
+            font-family: monospace;
+            z-index: 150;
+        }
+
+        .debug-console::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .debug-console::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 
@@ -208,11 +255,28 @@
             const [geminiData, setGeminiData] = useState(null);
             const [isGeminiLoading, setIsGeminiLoading] = useState(false);
 
+            // NOVOS ESTADOS - Admin e Debug
+            const [showAdminModal, setShowAdminModal] = useState(false);
+            const [showDebugConsole, setShowDebugConsole] = useState(true);
+            const [debugLogs, setDebugLogs] = useState([]);
+            const [firebaseStats, setFirebaseStats] = useState({ total: 0, songs: [] });
+
+            // Formulário Admin
+            const [adminForm, setAdminForm] = useState({ title: '', artist: '', youtubeId: '' });
+
             const audioRef = useRef(new Audio());
             const youtubeRef = useRef(null);
             const fileInputRef = useRef(null);
 
             const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
+
+            // FUNÇÃO DE DEBUG
+            const addDebugLog = (msg, type = 'info') => {
+                const timestamp = new Date().toLocaleTimeString('pt-BR');
+                const logEntry = `[${timestamp}] ${msg}`;
+                console.log(logEntry);
+                setDebugLogs(prev => [...prev.slice(-20), { msg: logEntry, type }]); // Mantém últimas 20 entradas
+            };
 
             // --- HELPER: Gerar ID único para o cache ---
             const generateCacheKey = (title, artist) => {
@@ -222,17 +286,23 @@
             // --- BUSCA ID DO VÍDEO (PRIORIDADE: FIREBASE -> LOCALSTORAGE -> API) ---
             const fetchYoutubeId = async (title, artist) => {
                 const cacheKey = generateCacheKey(title, artist);
+                addDebugLog(`🔍 Buscando: ${title} - ${artist}`, 'info');
 
                 // 1. TENTA FIREBASE (NUVEM - PREFERIDO)
                 if (isFirebaseActive && db) {
                     try {
+                        addDebugLog(`🔥 Tentando Firebase...`, 'info');
                         const doc = await db.collection('song_cache').doc(cacheKey).get();
                         if (doc.exists) {
                             const cachedId = doc.data().youtubeId;
+                            addDebugLog(`✅ Firebase: ${cachedId}`, 'success');
                             console.log(`[Firebase] ID encontrado na nuvem para ${title}: ${cachedId}`);
                             return cachedId;
+                        } else {
+                            addDebugLog(`⚠️ Firebase: Não encontrado`, 'warn');
                         }
                     } catch (e) {
+                        addDebugLog(`❌ Firebase erro: ${e.message}`, 'error');
                         console.warn("Erro ao ler Firebase, tentando LocalStorage...", e);
                     }
                 }
@@ -240,19 +310,25 @@
                 // 2. TENTA LOCALSTORAGE (FALLBACK SE FIREBASE FALHAR/OFFLINE)
                 const cachedId = localStorage.getItem(cacheKey);
                 if (cachedId) {
+                    addDebugLog(`💾 LocalStorage: ${cachedId}`, 'success');
                     console.log(`[LocalStorage] ID encontrado localmente para ${title}: ${cachedId}`);
                     return cachedId;
                 }
 
                 // Se já sabemos que a API está com erro e não achamos no cache, retorna null
-                if (isApiBroken) return null;
+                if (isApiBroken) {
+                    addDebugLog(`⛔ API bloqueada, usando fallback`, 'warn');
+                    return null;
+                }
 
                 // 3. BUSCA NORMAL NA API (SE NÃO ESTIVER EM NENHUM CACHE)
                 const q = encodeURIComponent(`${title} ${artist} official video`);
                 try {
+                    addDebugLog(`🌐 Tentando YouTube API...`, 'info');
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&videoEmbeddable=true&maxResults=1&key=${YOUTUBE_API_KEY}`);
 
                     if (!res.ok) {
+                        addDebugLog(`❌ YouTube API: ${res.status}`, 'error');
                         console.warn(`YouTube API Error ${res.status}. Switching to fallback mode.`);
                         setIsApiBroken(true);
                         return null;
@@ -271,7 +347,12 @@
                                 title: title,
                                 artist: artist,
                                 createdAt: new Date()
-                            }).catch(e => console.warn("Erro ao salvar no Firebase:", e));
+                            }).then(() => {
+                                addDebugLog(`✅ Salvo no Firebase: ${newId}`, 'success');
+                            }).catch(e => {
+                                addDebugLog(`❌ Erro ao salvar Firebase: ${e.message}`, 'error');
+                                console.warn("Erro ao salvar no Firebase:", e);
+                            });
                             console.log(`[Firebase] Novo ID salvo na nuvem: ${newId}`);
                         }
 
@@ -283,11 +364,77 @@
                         return newId;
                     }
                 } catch (e) {
+                    addDebugLog(`❌ API erro: ${e.message}`, 'error');
                     console.warn("Erro YT API", e);
                     setIsApiBroken(true);
                 }
                 return null;
             };
+
+            // --- FUNÇÕES DO PAINEL ADMIN ---
+            const loadFirebaseStats = async () => {
+                if (!isFirebaseActive || !db) return;
+                try {
+                    const snapshot = await db.collection('song_cache').get();
+                    const songs = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        songs.push({ id: doc.id, ...data });
+                    });
+                    setFirebaseStats({ total: songs.length, songs });
+                    addDebugLog(`📊 ${songs.length} músicas no Firebase`, 'info');
+                } catch (e) {
+                    addDebugLog(`❌ Erro ao carregar stats: ${e.message}`, 'error');
+                }
+            };
+
+            const saveToFirebase = async () => {
+                if (!adminForm.title || !adminForm.artist || !adminForm.youtubeId) {
+                    showToast('❌ Preencha todos os campos!');
+                    return;
+                }
+
+                if (!isFirebaseActive || !db) {
+                    showToast('❌ Firebase não está conectado!');
+                    addDebugLog('❌ Tentativa de salvar sem Firebase ativo', 'error');
+                    return;
+                }
+
+                const cacheKey = generateCacheKey(adminForm.title, adminForm.artist);
+
+                try {
+                    addDebugLog(`💾 Salvando: ${adminForm.title} - ${adminForm.artist}`, 'info');
+
+                    await db.collection('song_cache').doc(cacheKey).set({
+                        title: adminForm.title,
+                        artist: adminForm.artist,
+                        youtubeId: adminForm.youtubeId,
+                        createdAt: new Date()
+                    });
+
+                    // Também salva no LocalStorage como backup
+                    localStorage.setItem(cacheKey, adminForm.youtubeId);
+
+                    showToast('✅ Música salva com sucesso!');
+                    addDebugLog(`✅ Salvo: ${cacheKey} -> ${adminForm.youtubeId}`, 'success');
+
+                    setAdminForm({ title: '', artist: '', youtubeId: '' });
+                    loadFirebaseStats(); // Recarrega estatísticas
+                } catch (e) {
+                    showToast(`❌ Erro: ${e.message}`);
+                    addDebugLog(`❌ Erro ao salvar: ${e.message}`, 'error');
+                }
+            };
+
+            // Carrega estatísticas na inicialização
+            useEffect(() => {
+                if (isFirebaseActive) {
+                    addDebugLog('🚀 Iniciando IronMusic...', 'info');
+                    addDebugLog(`🔥 Firebase: ${isFirebaseActive ? 'CONECTADO' : 'DESCONECTADO'}`, isFirebaseActive ? 'success' : 'error');
+                    loadFirebaseStats();
+                }
+            }, []);
+
 
             // --- LÓGICA DE PLAYER ---
             useEffect(() => {
@@ -407,8 +554,11 @@
 
                     <div className="flex justify-between items-center p-4 pt-8 z-20 relative">
                         <h1 className="text-2xl font-bold tracking-tighter italic">IRON<span className={theme.text}>MUSIC</span></h1>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-center">
                             {['yellow', 'purple', 'green'].map(c => <button key={c} onClick={() => setActiveTheme(c)} className={`w-4 h-4 rounded-full bg-${c}-600 border ${activeTheme === c ? 'border-white' : 'border-transparent'}`}></button>)}
+                            <button onClick={() => setShowAdminModal(true)} className="ml-2 text-gray-400 hover:text-white transition" title="Painel Admin">
+                                <i className="fas fa-cog text-xl"></i>
+                            </button>
                         </div>
                     </div>
 
@@ -524,6 +674,120 @@
                                 <NavButton icon={Icons.ABC} label="Letra" active={view === 'lyrics'} onClick={() => setView('lyrics')} color={theme.text} />
                             </div>
                         </div>
+                    )}
+
+                    {/* PAINEL ADMIN MODAL */}
+                    {showAdminModal && (
+                        <div className="admin-modal">
+                            <div className="bg-gray-900 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto border border-white/20">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold">🔧 Painel Admin</h2>
+                                    <button onClick={() => setShowAdminModal(false)} className="text-gray-400 hover:text-white">
+                                        <i className="fas fa-times text-xl"></i>
+                                    </button>
+                                </div>
+
+                                {/* Status Firebase */}
+                                <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
+                                    <h3 className="text-sm font-bold mb-2">📊 Status do Firebase</h3>
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className={isFirebaseActive ? 'text-green-400' : 'text-red-400'}>
+                                            {isFirebaseActive ? '🟢 Conectado' : '🔴 Desconectado'}
+                                        </span>
+                                        <span className="text-gray-400">|</span>
+                                        <span className="text-gray-300">⚡ {firebaseStats.total} músicas</span>
+                                        <button onClick={loadFirebaseStats} className="ml-auto text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20">
+                                            🔄 Atualizar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Formulário */}
+                                <div className="mb-6">
+                                    <h3 className="text-sm font-bold mb-3">➕ Adicionar Música</h3>
+                                    <div className="space-y-3">
+                                        <input
+                                            type="text"
+                                            placeholder="Título (ex: Snuff)"
+                                            value={adminForm.title}
+                                            onChange={e => setAdminForm({ ...adminForm, title: e.target.value })}
+                                            className="w-full bg-white/10 border border-white/20 p-3 rounded-lg outline-none focus:border-white/40 text-sm"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Artista (ex: Slipknot)"
+                                            value={adminForm.artist}
+                                            onChange={e => setAdminForm({ ...adminForm, artist: e.target.value })}
+                                            className="w-full bg-white/10 border border-white/20 p-3 rounded-lg outline-none focus:border-white/40 text-sm"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="YouTube ID (ex: LXEKuttVRIo)"
+                                            value={adminForm.youtubeId}
+                                            onChange={e => setAdminForm({ ...adminForm, youtubeId: e.target.value })}
+                                            className="w-full bg-white/10 border border-white/20 p-3 rounded-lg outline-none focus:border-white/40 text-sm font-mono"
+                                        />
+                                        <div className="text-xs text-gray-400 bg-white/5 p-2 rounded">
+                                            💡 <strong>Dica:</strong> YouTube ID está na URL após "v=". Ex: youtube.com/watch?v=<span className="text-yellow-400">LXEKuttVRIo</span>
+                                        </div>
+                                        <button
+                                            onClick={saveToFirebase}
+                                            className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 p-3 rounded-lg font-bold text-black transition"
+                                        >
+                                            💾 Salvar no Firebase
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Lista de músicas salvas */}
+                                {firebaseStats.songs.length > 0 && (
+                                    <div>
+                                        <h3 className="text-sm font-bold mb-2">📋 Músicas no Firebase ({firebaseStats.total})</h3>
+                                        <div className="space-y-1 max-h-48 overflow-y-auto bg-white/5 rounded-lg p-2 text-xs">
+                                            {firebaseStats.songs.map((song, idx) => (
+                                                <div key={idx} className="flex justify-between items-center py-1 px-2 hover:bg-white/10 rounded">
+                                                    <span className="truncate flex-1">
+                                                        <span className="text-white font-bold">{song.title}</span>
+                                                        <span className="text-gray-400"> - {song.artist}</span>
+                                                    </span>
+                                                    <span className="text-gray-500 font-mono text-[10px] ml-2">{song.youtubeId}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* DEBUG CONSOLE */}
+                    {showDebugConsole && debugLogs.length > 0 && (
+                        <div className="debug-console">
+                            <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/20">
+                                <span className="text-white font-bold text-xs">🐛 Debug</span>
+                                <button onClick={() => setShowDebugConsole(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                            </div>
+                            <div className="space-y-1">
+                                {debugLogs.map((log, idx) => (
+                                    <div key={idx} className={`text-[9px] ${log.type === 'success' ? 'text-green-400' :
+                                            log.type === 'error' ? 'text-red-400' :
+                                                log.type === 'warn' ? 'text-yellow-400' :
+                                                    'text-gray-300'
+                                        }`}>
+                                        {log.msg}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {!showDebugConsole && (
+                        <button
+                            onClick={() => setShowDebugConsole(true)}
+                            className="fixed bottom-24 right-4 bg-white/10 hover:bg-white/20 p-2 rounded-full text-xs z-150 border border-white/20"
+                            title="Mostrar Debug Console"
+                        >
+                            🐛
+                        </button>
                     )}
                 </div>
             );
