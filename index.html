@@ -350,6 +350,13 @@
             const [volume, setVolume] = useState(100); // Volume 0-100
             const [isMuted, setIsMuted] = useState(false);
 
+            // NOVOS ESTADOS - Recursos Avançados
+            const [isDetectingAd, setIsDetectingAd] = useState(false); // Detectando propaganda
+            const [viaCristaisLoop, setViaCristaisLoop] = useState(null); // Controle do loop
+            const [bandInfo, setBandInfo] = useState(null); // Informações da banda
+            const [showBandInfo, setShowBandInfo] = useState(false); // Modal de info
+            const [availableVoices, setAvailableVoices] = useState([]); // Vozes TTS disponíveis
+
             const audioRef = useRef(new Audio());
             const youtubeRef = useRef(null);
             const fileInputRef = useRef(null);
@@ -492,10 +499,15 @@
                 try {
                     addDebugLog(`💾 Salvando: ${adminForm.title} - ${adminForm.artist}`, 'info');
 
+                    // Busca capa e informações do iTunes
+                    const itunesData = await fetchAlbumArtwork(adminForm.title, adminForm.artist);
+
                     await db.collection('song_cache').doc(cacheKey).set({
                         title: adminForm.title,
                         artist: adminForm.artist,
                         youtubeId: adminForm.youtubeId,
+                        artwork: itunesData?.artwork || 'https://via.placeholder.com/600/000000/FFFFFF?text=MP3',
+                        albumName: itunesData?.albumName || 'Desconhecido',
                         createdAt: new Date()
                     });
 
@@ -504,9 +516,11 @@
 
                     showToast('✅ Música salva com sucesso!');
                     addDebugLog(`✅ Salvo: ${cacheKey} -> ${adminForm.youtubeId}`, 'success');
+                    if (itunesData) addDebugLog(`🎨 Álbum: ${itunesData.albumName}`, 'success');
 
                     setAdminForm({ title: '', artist: '', youtubeId: '' });
-                    loadFirebaseStats(); // Recarrega estatísticas
+                    loadFirebaseStats();
+                    loadMusicLibrary(); // Recarrega biblioteca
                 } catch (e) {
                     showToast(`❌ Erro: ${e.message}`);
                     addDebugLog(`❌ Erro ao salvar: ${e.message}`, 'error');
@@ -572,19 +586,87 @@
                 }
             };
 
-            // Função para tocar áudio "Via Cristais"
+            // Função para tocar áudio "Via Cristais" com voz melhorada
             const playViaCristaisAudio = () => {
                 const synth = window.speechSynthesis;
-                const utterance = new SpeechSynthesisUtterance('Via Cristais. Nosso objetivo é deixar o seu caminho seguro.');
+                synth.cancel();
+
+                const utterance = new SpeechSynthesisUtterance('Via Cristais. Nosso objetivo, é deixar o seu caminho seguro.');
                 utterance.lang = 'pt-BR';
-                utterance.rate = 0.9; // Velocidade
-                utterance.pitch = 1.0; // Tom
-                utterance.volume = volume / 100; // Volume baseado no slider
+                utterance.rate = 0.85;
+                utterance.pitch = 0.8;
+                utterance.volume = volume / 100;
+
+                const voices = synth.getVoices();
+                const brazilianVoice = voices.find(v => v.lang.includes('pt-BR') && v.name.includes('Female'))
+                    || voices.find(v => v.lang.includes('pt-BR'));
+                if (brazilianVoice) utterance.voice = brazilianVoice;
 
                 synth.speak(utterance);
-                addDebugLog('🔊 Via Cristais - Áudio tocando', 'info');
-
+                addDebugLog('🔊 Via Cristais', 'info');
                 return utterance;
+            };
+
+            // Loop Via Cristais (para propaganda)
+            const startViaCristaisLoop = () => {
+                if (viaCristaisLoop) return;
+                playViaCristaisAudio();
+                const interval = setInterval(() => playViaCristaisAudio(), 6000);
+                setViaCristaisLoop(interval);
+                addDebugLog('🔁 Loop iniciado', 'info');
+            };
+
+            const stopViaCristaisLoop = () => {
+                if (viaCristaisLoop) {
+                    clearInterval(viaCristaisLoop);
+                    setViaCristaisLoop(null);
+                    window.speechSynthesis.cancel();
+                    addDebugLog('⏹️ Loop parado', 'info');
+                }
+            };
+
+            // Busca capa iTunes
+            const fetchAlbumArtwork = async (title, artist) => {
+                try {
+                    const q = encodeURIComponent(`${title} ${artist}`);
+                    const res = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
+                    const data = await res.json();
+                    if (data.results?.length > 0) {
+                        const track = data.results[0];
+                        return {
+                            artwork: track.artworkUrl100.replace('100x100', '600x600'),
+                            albumName: track.collectionName,
+                            artistName: track.artistName
+                        };
+                    }
+                    return null;
+                } catch (e) {
+                    addDebugLog(`❌ iTunes: ${e.message}`, 'error');
+                    return null;
+                }
+            };
+
+            // Info da banda via Gemini
+            const fetchBandInfo = async (artist) => {
+                if (bandInfo?.artist === artist) {
+                    setShowBandInfo(true);
+                    return;
+                }
+                try {
+                    setShowBandInfo(true);
+                    setBandInfo({ artist, loading: true });
+                    const prompt = `Informações sobre ${artist}: História, membros, estilo, principais álbuns. Máximo 200 palavras.`;
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    const data = await res.json();
+                    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Não disponível';
+                    setBandInfo({ artist, content, loading: false });
+                } catch (e) {
+                    setBandInfo({ artist, content: 'Erro ao carregar', loading: false });
+                }
             };
 
             // Navegar para próxima música
@@ -676,6 +758,53 @@
                     }
                 }
             }, [currentTrack, isPlaying]);
+
+            // Detector automático de propaganda
+            useEffect(() => {
+                if (!currentTrack || !isPlaying || sourceMode !== 'youtube') {
+                    stopViaCristaisLoop();
+                    return;
+                }
+
+                // Aguarda 3 segundos após música iniciar
+                const muteTimer = setTimeout(() => {
+                    addDebugLog('🔇 Mutando possível propaganda...', 'warn');
+
+                    // Muta o YouTube
+                    if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                        try {
+                            youtubeRef.current.contentWindow.postMessage(
+                                JSON.stringify({ event: 'command', func: 'mute' }), '*'
+                            );
+                            setIsMuted(true);
+                        } catch (e) { }
+                    }
+
+                    // Inicia loop Via Cristais
+                    startViaCristaisLoop();
+
+                    // Após 12 segundos, assume que música começou e desmuta
+                    setTimeout(() => {
+                        addDebugLog('🔊 Desmutando - música iniciada', 'success');
+                        if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                            try {
+                                youtubeRef.current.contentWindow.postMessage(
+                                    JSON.stringify({ event: 'command', func: 'unMute' }), '*'
+                                );
+                                setIsMuted(false);
+                            } catch (e) { }
+                        }
+                        stopViaCristaisLoop();
+                    }, 12000); // 12 segundos total (3 + 9)
+
+                }, 3000); // Aguarda 3s
+
+                return () => {
+                    clearTimeout(muteTimer);
+                    stopViaCristaisLoop();
+                };
+            }, [currentTrack, isPlaying, sourceMode]);
+
 
             const getYoutubeEmbed = () => {
                 if (!currentTrack || !currentTrack.youtubeId) return '';
@@ -914,8 +1043,24 @@
                             </div>
 
                             <div className="p-8 pb-12 space-y-6 bg-black">
-                                <div className="flex justify-between items-end">
-                                    <div><h2 className="text-2xl font-bold text-white mb-1">{currentTrack.title}</h2><p className={`text-lg ${theme.text}`}>{currentTrack.artist}</p></div>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                        <h2 className="text-2xl font-bold text-white mb-1">{currentTrack.title}</h2>
+                                        <p className={`text-lg ${theme.text}`}>{currentTrack.artist}</p>
+                                        {currentTrack.albumName && (
+                                            <p className="text-sm text-gray-400 mt-1">💿 {currentTrack.albumName}</p>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => fetchBandInfo(currentTrack.artist)}
+                                        className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-sm flex items-center gap-2 transition"
+                                        title="Sobre a Banda"
+                                    >
+                                        <i className="fas fa-info-circle"></i>
+                                        <span className="hidden sm:inline">Sobre</span>
+                                    </button>
+                                </div>
+                                <div className="flex justify-between">
                                     <button><Icons.Heart width={28} className="text-gray-400" /></button>
                                 </div>
 
@@ -1052,6 +1197,40 @@
                             </div>
                         </div>
                     )}
+
+                    {/* MODAL INFO DA BANDA */}
+                    {showBandInfo && bandInfo && (
+                        <div className="admin-modal">
+                            <div className="modal-content max-w-2xl">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                                        <i className="fas fa-info-circle"></i>
+                                        Sobre {bandInfo.artist}
+                                    </h2>
+                                    <button
+                                        onClick={() => setShowBandInfo(false)}
+                                        className="text-gray-400 hover:text-white text-2xl"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+
+                                {bandInfo.loading ? (
+                                    <div className="text-center py-12">
+                                        <div className="animate-spin text-4xl mb-4">⏳</div>
+                                        <p className="text-gray-400">Carregando informações...</p>
+                                    </div>
+                                ) : (
+                                    <div className="prose prose-invert prose-sm max-w-none">
+                                        <div className="text-gray-300 leading-relaxed whitespace-pre-wrap">
+                                            {bandInfo.content}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
 
                     {/* DEBUG CONSOLE */}
                     {showDebugConsole && debugLogs.length > 0 && (
