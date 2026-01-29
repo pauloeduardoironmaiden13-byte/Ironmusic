@@ -353,6 +353,12 @@
             // NOVOS ESTADOS - Recursos Avançados
             const [bandInfo, setBandInfo] = useState(null); // Informações da banda
             const [showBandInfo, setShowBandInfo] = useState(false); // Modal de info
+            const [bandAlbums, setBandAlbums] = useState([]); // Lista de álbuns da banda
+            const [showAlbumsModal, setShowAlbumsModal] = useState(false); // Modal mostrando álbuns
+            const [loadingAlbums, setLoadingAlbums] = useState(false); // Carregando álbuns
+            const [selectedAlbum, setSelectedAlbum] = useState(null); // Álbum selecionado
+            const [albumTracks, setAlbumTracks] = useState([]); // Músicas do álbum
+            const [loadingTracks, setLoadingTracks] = useState(false); // Carregando músicas
 
             const audioRef = useRef(new Audio());
             const youtubeRef = useRef(null);
@@ -626,6 +632,171 @@
                 }
             };
 
+            // Busca todos os álbuns da banda via iTunes
+            const fetchBandAlbums = async (artist) => {
+                if (!artist || artist.trim() === '') {
+                    showToast('❌ Digite o nome do artista!');
+                    return;
+                }
+
+                try {
+                    setLoadingAlbums(true);
+                    setShowAlbumsModal(true);
+                    setBandAlbums([]);
+                    addDebugLog(`🎸 Buscando álbuns: ${artist}`, 'info');
+
+                    const q = encodeURIComponent(artist);
+                    const res = await fetch(`https://itunes.apple.com/search?term=${q}&entity=album&limit=50`);
+                    const data = await res.json();
+
+                    if (data.results && data.results.length > 0) {
+                        // Remove duplicatas por nome do álbum
+                        const uniqueAlbums = [];
+                        const seen = new Set();
+
+                        data.results.forEach(album => {
+                            const key = `${album.collectionName}-${album.artistName}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                uniqueAlbums.push({
+                                    name: album.collectionName,
+                                    artist: album.artistName,
+                                    artwork: album.artworkUrl100.replace('100x100', '600x600'),
+                                    releaseDate: new Date(album.releaseDate).getFullYear(),
+                                    trackCount: album.trackCount,
+                                    collectionId: album.collectionId
+                                });
+                            }
+                        });
+
+                        setBandAlbums(uniqueAlbums);
+                        addDebugLog(`✅ ${uniqueAlbums.length} álbuns encontrados`, 'success');
+                    } else {
+                        setBandAlbums([]);
+                        addDebugLog(`⚠️ Nenhum álbum encontrado`, 'warn');
+                    }
+                } catch (e) {
+                    addDebugLog(`❌ Erro ao buscar álbuns: ${e.message}`, 'error');
+                    showToast('❌ Erro ao buscar álbuns');
+                } finally {
+                    setLoadingAlbums(false);
+                }
+            };
+
+            // Busca músicas de um álbum específico
+            const fetchAlbumTracks = async (album) => {
+                try {
+                    setLoadingTracks(true);
+                    setSelectedAlbum(album);
+                    setAlbumTracks([]);
+                    addDebugLog(`🎵 Buscando músicas: ${album.name}`, 'info');
+
+                    const res = await fetch(`https://itunes.apple.com/lookup?id=${album.collectionId}&entity=song`);
+                    const data = await res.json();
+
+                    if (data.results && data.results.length > 1) {
+                        // Primeiro resultado é o álbum, resto são músicas
+                        const tracks = data.results.slice(1).map(track => ({
+                            name: track.trackName,
+                            artist: track.artistName,
+                            trackNumber: track.trackNumber,
+                            duration: Math.floor(track.trackTimeMillis / 1000), // segundos
+                            previewUrl: track.previewUrl
+                        }));
+
+                        setAlbumTracks(tracks);
+                        addDebugLog(`✅ ${tracks.length} músicas encontradas`, 'success');
+                    } else {
+                        setAlbumTracks([]);
+                        addDebugLog(`⚠️ Nenhuma música encontrada`, 'warn');
+                    }
+                } catch (e) {
+                    addDebugLog(`❌ Erro ao buscar músicas: ${e.message}`, 'error');
+                    showToast('❌ Erro ao buscar músicas');
+                } finally {
+                    setLoadingTracks(false);
+                }
+            };
+
+            // Adiciona música selecionada - busca YouTube ID e salva automaticamente
+            const selectTrackFromAlbum = async (track) => {
+                try {
+                    // Fecha modal e mostra loading
+                    setShowAlbumsModal(false);
+                    setSelectedAlbum(null);
+                    setAlbumTracks([]);
+                    showToast(`🔍 Buscando "${track.name}" no YouTube...`);
+                    addDebugLog(`🔍 Buscando YouTube ID: ${track.name} - ${track.artist}`, 'info');
+
+                    // Busca YouTube ID via API (com filtros mais precisos)
+                    const searchQuery = `${track.artist} ${track.name} official audio`;
+                    const res = await fetch(
+                        `https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${YOUTUBE_API_KEY}&type=video&videoEmbeddable=true&videoCategoryId=10&maxResults=1`
+                    );
+
+                    if (!res.ok) {
+                        throw new Error(`YouTube API retornou erro ${res.status}`);
+                    }
+
+                    const data = await res.json();
+
+                    if (data.items && data.items.length > 0) {
+                        const youtubeId = data.items[0].id.videoId;
+                        addDebugLog(`✅ YouTube ID encontrado: ${youtubeId}`, 'success');
+
+                        // Busca artwork via iTunes (capa do álbum)
+                        const artwork = selectedAlbum?.artwork || 'https://via.placeholder.com/600/000000/FFFFFF?text=Album';
+
+                        // Gera chave única para o cache (mesmo padrão de fetchYoutubeId)
+                        const cacheKey = generateCacheKey(track.name, track.artist);
+
+                        // ✅ CORREÇÃO: Salva no FIRESTORE (não Realtime Database)
+                        if (isFirebaseActive && db) {
+                            await db.collection('song_cache').doc(cacheKey).set({
+                                title: track.name,
+                                artist: track.artist,
+                                youtubeId: youtubeId,
+                                artwork: artwork,
+                                albumName: selectedAlbum?.name || 'Desconhecido',
+                                createdAt: new Date()
+                            });
+
+                            addDebugLog(`💾 Salvo no Firebase: ${track.name}`, 'success');
+                        }
+
+                        // Também salva no LocalStorage como backup
+                        localStorage.setItem(cacheKey, youtubeId);
+
+                        showToast(`✅ "${track.name}" adicionada e pronta para tocar!`);
+
+                        // Cria objeto de música para tocar
+                        const newSong = {
+                            title: track.name,
+                            artist: track.artist,
+                            youtubeId: youtubeId,
+                            artwork: artwork,
+                            albumName: selectedAlbum?.name || ''
+                        };
+
+                        // Recarrega biblioteca
+                        loadMusicLibrary();
+
+                        // Toca a música automaticamente
+                        setTimeout(() => {
+                            handlePlay(newSong);
+                        }, 500);
+
+                    } else {
+                        addDebugLog(`❌ Nenhum vídeo encontrado no YouTube`, 'error');
+                        showToast(`❌ Não encontrei "${track.name}" no YouTube`);
+                    }
+
+                } catch (e) {
+                    addDebugLog(`❌ Erro ao buscar/salvar: ${e.message}`, 'error');
+                    showToast(`❌ Erro: ${e.message}`);
+                }
+            };
+
             // Navegar para próxima música
             const playNext = () => {
                 if (musicLibrary.length === 0) return;
@@ -779,16 +950,50 @@
             };
 
             const searchMusic = async () => {
-                if (!query) return; setLoading(true);
+                if (!query) return;
+                setLoading(true);
+
                 try {
-                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20`);
+                    // Busca álbuns do artista
+                    addDebugLog(`🔍 Buscando álbuns: ${query}`, 'info');
+                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=album&limit=50`);
                     const d = await res.json();
-                    setSearchResults(d.results.map(i => ({
-                        id: i.trackId, title: i.trackName, artist: i.artistName,
-                        artwork: i.artworkUrl100.replace('100x100', '600x600').replace('http:', 'https:'),
-                        previewUrl: i.previewUrl
-                    })));
-                } catch (e) { showToast("Erro na busca do iTunes."); } finally { setLoading(false); }
+
+                    if (d.results && d.results.length > 0) {
+                        // Remove duplicatas e formata como álbuns
+                        const uniqueAlbums = [];
+                        const seen = new Set();
+
+                        d.results.forEach(album => {
+                            const key = `${album.collectionName}-${album.artistName}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                uniqueAlbums.push({
+                                    name: album.collectionName,
+                                    artist: album.artistName,
+                                    artwork: album.artworkUrl100.replace('100x100', '600x600'),
+                                    releaseDate: new Date(album.releaseDate).getFullYear(),
+                                    trackCount: album.trackCount,
+                                    collectionId: album.collectionId
+                                });
+                            }
+                        });
+
+                        setBandAlbums(uniqueAlbums);
+                        setSearchResults([]); // Limpa resultados antigos de músicas
+                        addDebugLog(`✅ ${uniqueAlbums.length} álbuns encontrados`, 'success');
+                        showToast(`✅ ${uniqueAlbums.length} álbuns encontrados!`);
+                    } else {
+                        setBandAlbums([]);
+                        setSearchResults([]);
+                        showToast('❌ Nenhum álbum encontrado');
+                    }
+                } catch (e) {
+                    addDebugLog(`❌ Erro na busca: ${e.message}`, 'error');
+                    showToast("❌ Erro na busca do iTunes.");
+                } finally {
+                    setLoading(false);
+                }
             };
 
             const theme = activeTheme === 'purple' ? { spot: 'theme-purple-spot', text: 'text-purple-500' } : activeTheme === 'green' ? { spot: 'theme-green-spot', text: 'text-green-500' } : { spot: 'theme-yellow-spot', text: 'text-yellow-500' };
@@ -863,20 +1068,113 @@
                         {view === 'search' && (
                             <div className="space-y-4 animate-fade-in">
                                 <div className="relative">
-                                    <input type="text" placeholder="Digite música ou artista..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} />
+                                    <input type="text" placeholder="Digite nome do artista (ex: Slipknot)..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} />
                                     <div className="absolute left-4 top-4 text-gray-400"><Icons.Search width={20} /></div>
                                     <button onClick={searchMusic} className="absolute right-2 top-2 bg-white/10 p-2 rounded-full text-xs">Buscar</button>
                                 </div>
+
                                 {loading && <div className="loader mx-auto"></div>}
-                                <div className="space-y-2">
-                                    {searchResults.length === 0 && !loading && query && <p className="text-center text-gray-500 text-sm">Pressione Enter ou clique em Buscar</p>}
-                                    {searchResults.map(t => (
-                                        <div key={t.id} onClick={() => handlePlay(t)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer border border-transparent hover:border-white/10 transition">
-                                            <img src={t.artwork} className="w-12 h-12 rounded" />
-                                            <div className="flex-1 overflow-hidden"><p className={`font-bold truncate ${currentTrack?.title === t.title ? theme.text : ''}`}>{t.title}</p><p className="text-xs text-gray-500">{t.artist}</p></div>
-                                            <Icons.Play width={16} className="text-white/50" />
+
+                                {/* MOSTRA MÚSICAS DO ÁLBUM se houver álbum selecionado */}
+                                {selectedAlbum ? (
+                                    <div className="space-y-4">
+                                        {/* Header com volta */}
+                                        <div className="flex items-center gap-4 pb-4 border-b border-white/10">
+                                            <button
+                                                onClick={() => { setSelectedAlbum(null); setAlbumTracks([]); }}
+                                                className="text-white/60 hover:text-white text-2xl"
+                                            >
+                                                ← Voltar
+                                            </button>
+                                            <img src={selectedAlbum.artwork} className="w-16 h-16 rounded-lg shadow-lg" alt={selectedAlbum.name} />
+                                            <div>
+                                                <h2 className="text-xl font-bold">{selectedAlbum.name}</h2>
+                                                <p className="text-sm text-gray-400">{selectedAlbum.artist} • {selectedAlbum.releaseDate}</p>
+                                            </div>
                                         </div>
-                                    ))}</div>
+
+                                        {loadingTracks ? (
+                                            <div className="text-center py-16">
+                                                <div className="animate-spin text-5xl mb-4">🎵</div>
+                                                <p className="text-gray-400">Carregando músicas...</p>
+                                            </div>
+                                        ) : albumTracks.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {albumTracks.map((track, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        onClick={() => selectTrackFromAlbum(track)}
+                                                        className="flex items-center gap-4 bg-white/5 hover:bg-white/10 p-4 rounded-lg transition cursor-pointer border border-transparent hover:border-purple-500/30 group"
+                                                    >
+                                                        <div className="w-8 text-center text-gray-500 group-hover:text-purple-400 font-bold">
+                                                            {track.trackNumber}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <h4 className="font-bold text-base group-hover:text-purple-300 transition">{track.name}</h4>
+                                                            <p className="text-sm text-gray-400">{track.artist}</p>
+                                                        </div>
+                                                        <div className="text-sm text-gray-500">
+                                                            {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, '0')}
+                                                        </div>
+                                                        <div className="text-purple-400 opacity-0 group-hover:opacity-100 transition">
+                                                            ▶ Adicionar
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-center text-gray-500">Nenhuma música encontrada</p>
+                                        )}
+                                    </div>
+                                ) : bandAlbums.length > 0 ? (
+                                    // MOSTRA GRID DE ÁLBUNS
+                                    <div className="space-y-4">
+                                        <h3 className="text-xl font-bold">🎸 Álbuns Encontrados</h3>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                            {bandAlbums.map((album, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => fetchAlbumTracks(album)}
+                                                    className="bg-white/5 rounded-xl p-4 hover:bg-white/10 transition cursor-pointer border border-transparent hover:border-purple-500/30 group hover:scale-105 transform"
+                                                >
+                                                    <div className="relative mb-3 overflow-hidden rounded-lg shadow-lg">
+                                                        <img
+                                                            src={album.artwork}
+                                                            alt={album.name}
+                                                            className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-300"
+                                                        />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-end p-3">
+                                                            <span className="text-white font-bold text-sm">▶ Ver Músicas</span>
+                                                        </div>
+                                                    </div>
+                                                    <h4 className="font-bold text-sm line-clamp-2 mb-1 group-hover:text-purple-300 transition">{album.name}</h4>
+                                                    <p className="text-xs text-gray-500 mb-2">{album.artist}</p>
+                                                    <div className="flex justify-between text-xs text-gray-600">
+                                                        <span>{album.releaseDate}</span>
+                                                        <span className="text-purple-400/70">{album.trackCount} 🎵</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // MENSAGEM INICIAL
+                                    !loading && query && (
+                                        <div className="text-center py-16">
+                                            <div className="text-6xl mb-4">🔍</div>
+                                            <p className="text-gray-400">Nenhum álbum encontrado</p>
+                                            <p className="text-gray-500 text-sm mt-2">Tente buscar outro artista</p>
+                                        </div>
+                                    )
+                                )}
+
+                                {!loading && !query && bandAlbums.length === 0 && (
+                                    <div className="text-center py-16">
+                                        <div className="text-6xl mb-4">🎸</div>
+                                        <p className="text-gray-400">Digite o nome de um artista</p>
+                                        <p className="text-gray-500 text-sm mt-2">Ex: Slipknot, Iron Maiden, Metallica</p>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -1063,6 +1361,12 @@
                                             onChange={e => setAdminForm({ ...adminForm, artist: e.target.value })}
                                             className="w-full bg-white/10 border border-white/20 p-3 rounded-lg outline-none focus:border-white/40 text-sm"
                                         />
+                                        <button
+                                            onClick={() => fetchBandAlbums(adminForm.artist)}
+                                            className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 p-2 rounded-lg font-bold text-white transition text-sm"
+                                        >
+                                            🎸 Ver Todos os CDs desta Banda
+                                        </button>
                                         <input
                                             type="text"
                                             placeholder="YouTube ID (ex: LXEKuttVRIo)"
@@ -1136,8 +1440,129 @@
                         </div>
                     )}
 
+                    {/* MODAL - ÁLBUNS E MÚSICAS DA BANDA */}
+                    {showAlbumsModal && (
+                        <div className="fixed inset-0 bg-black/95 z-200 flex items-center justify-center p-4 animate-fadeIn" onClick={() => { if (!selectedAlbum) setShowAlbumsModal(false); }}>
+                            <div className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                                {/* Header */}
+                                <div className="flex justify-between items-center p-6 border-b border-white/10 bg-gradient-to-r from-purple-900/20 to-transparent">
+                                    <div>
+                                        {selectedAlbum ? (
+                                            <div className="flex items-center gap-4">
+                                                <button
+                                                    onClick={() => { setSelectedAlbum(null); setAlbumTracks([]); }}
+                                                    className="text-white/60 hover:text-white text-2xl"
+                                                >
+                                                    ←
+                                                </button>
+                                                <div className="flex items-center gap-3">
+                                                    <img src={selectedAlbum.artwork} className="w-16 h-16 rounded-lg" alt={selectedAlbum.name} />
+                                                    <div>
+                                                        <h2 className="text-xl font-bold">{selectedAlbum.name}</h2>
+                                                        <p className="text-sm text-gray-400">{selectedAlbum.artist} • {selectedAlbum.releaseDate}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <h2 className="text-2xl font-bold flex items-center gap-2">
+                                                🎸 Álbuns Disponíveis
+                                            </h2>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => { setShowAlbumsModal(false); setSelectedAlbum(null); setAlbumTracks([]); }}
+                                        className="text-white/60 hover:text-white text-3xl leading-none hover:rotate-90 transition-transform"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
 
-                    {/* DEBUG CONSOLE */}
+                                {/* Conteúdo */}
+                                <div className="p-6 overflow-y-auto max-h-[calc(85vh-100px)]">
+                                    {selectedAlbum ? (
+                                        // MOSTRA MÚSICAS DO ÁLBUM
+                                        loadingTracks ? (
+                                            <div className="text-center py-16">
+                                                <div className="animate-spin text-5xl mb-4">🎵</div>
+                                                <p className="text-gray-400 text-lg">Carregando músicas...</p>
+                                            </div>
+                                        ) : albumTracks.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {albumTracks.map((track, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        onClick={() => selectTrackFromAlbum(track)}
+                                                        className="flex items-center gap-4 bg-white/5 hover:bg-white/10 p-4 rounded-lg transition cursor-pointer border border-transparent hover:border-purple-500/30 group"
+                                                    >
+                                                        <div className="w-8 text-center text-gray-500 group-hover:text-purple-400 font-bold">
+                                                            {track.trackNumber}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <h4 className="font-bold text-base group-hover:text-purple-300 transition">{track.name}</h4>
+                                                            <p className="text-sm text-gray-400">{track.artist}</p>
+                                                        </div>
+                                                        <div className="text-sm text-gray-500">
+                                                            {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, '0')}
+                                                        </div>
+                                                        <div className="text-purple-400 opacity-0 group-hover:opacity-100 transition">
+                                                            ✓ Selecionar
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-16">
+                                                <p className="text-gray-400 text-lg">Nenhuma música encontrada</p>
+                                            </div>
+                                        )
+                                    ) : (
+                                        // MOSTRA GRID DE ÁLBUMS
+                                        loadingAlbums ? (
+                                            <div className="text-center py-16">
+                                                <div className="animate-spin text-5xl mb-4">⏳</div>
+                                                <p className="text-gray-400 text-lg">Buscando álbuns...</p>
+                                            </div>
+                                        ) : bandAlbums.length > 0 ? (
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
+                                                {bandAlbums.map((album, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        onClick={() => fetchAlbumTracks(album)}
+                                                        className="bg-white/5 rounded-xl p-4 hover:bg-white/10 transition cursor-pointer border border-transparent hover:border-purple-500/30 group hover:scale-105 transform"
+                                                    >
+                                                        <div className="relative mb-3 overflow-hidden rounded-lg shadow-lg">
+                                                            <img
+                                                                src={album.artwork}
+                                                                alt={album.name}
+                                                                className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-300"
+                                                            />
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-end p-3">
+                                                                <span className="text-white font-bold text-sm">▶ Ver Músicas</span>
+                                                            </div>
+                                                        </div>
+                                                        <h4 className="font-bold text-sm line-clamp-2 mb-1 group-hover:text-purple-300 transition">{album.name}</h4>
+                                                        <p className="text-xs text-gray-500 mb-2">{album.artist}</p>
+                                                        <div className="flex justify-between text-xs text-gray-600">
+                                                            <span>{album.releaseDate}</span>
+                                                            <span className="text-purple-400/70">{album.trackCount} 🎵</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-16">
+                                                <div className="text-6xl mb-4">🔍</div>
+                                                <p className="text-gray-400 text-lg">Nenhum álbum encontrado</p>
+                                                <p className="text-gray-500 text-sm mt-2">Tente buscar outro artista</p>
+                                            </div>
+                                        )
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+
                     {showDebugConsole && debugLogs.length > 0 && (
                         <div className="debug-console">
                             <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/20">
