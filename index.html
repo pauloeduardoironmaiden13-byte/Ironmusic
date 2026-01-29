@@ -582,45 +582,6 @@
                 }
             };
 
-            // Função para tocar áudio "Via Cristais" com voz melhorada
-            const playViaCristaisAudio = () => {
-                const synth = window.speechSynthesis;
-                synth.cancel();
-
-                const utterance = new SpeechSynthesisUtterance('Via Cristais. Nosso objetivo, é deixar o seu caminho seguro.');
-                utterance.lang = 'pt-BR';
-                utterance.rate = 0.85;
-                utterance.pitch = 0.8;
-                utterance.volume = volume / 100;
-
-                const voices = synth.getVoices();
-                const brazilianVoice = voices.find(v => v.lang.includes('pt-BR') && v.name.includes('Female'))
-                    || voices.find(v => v.lang.includes('pt-BR'));
-                if (brazilianVoice) utterance.voice = brazilianVoice;
-
-                synth.speak(utterance);
-                addDebugLog('🔊 Via Cristais', 'info');
-                return utterance;
-            };
-
-            // Loop Via Cristais (para propaganda)
-            const startViaCristaisLoop = () => {
-                if (viaCristaisLoop) return;
-                playViaCristaisAudio();
-                const interval = setInterval(() => playViaCristaisAudio(), 6000);
-                setViaCristaisLoop(interval);
-                addDebugLog('🔁 Loop iniciado', 'info');
-            };
-
-            const stopViaCristaisLoop = () => {
-                if (viaCristaisLoop) {
-                    clearInterval(viaCristaisLoop);
-                    setViaCristaisLoop(null);
-                    window.speechSynthesis.cancel();
-                    addDebugLog('⏹️ Loop parado', 'info');
-                }
-            };
-
             // Busca capa iTunes
             const fetchAlbumArtwork = async (title, artist) => {
                 try {
@@ -662,43 +623,6 @@
                     setBandInfo({ artist, content, loading: false });
                 } catch (e) {
                     setBandInfo({ artist, content: 'Erro ao carregar', loading: false });
-                }
-            };
-
-            // Busca informações sobre música via Gemini (ÉTICA - sem letras completas)
-            const fetchGeminiInfo = async (track) => {
-                if (!track) return;
-
-                try {
-                    setIsGeminiLoading(true);
-                    addDebugLog(`🎵 Buscando info: ${track.title}`, 'info');
-
-                    const prompt = `Sobre a música "${track.title}" de ${track.artist}, forneça:
-
-1. **Tema e Mensagem**: Resumo do que a música fala (máximo 100 palavras)
-2. **Contexto**: Álbum, ano, curiosidades
-3. **Acordes Principais**: Progressão básica (ex: C Am F G)
-4. **Tom**: Tom da música
-5. **Link**: Sugira onde encontrar letra oficial (Genius, AZLyrics etc)
-
-NÃO forneça letra completa. Apenas informações educacionais.`;
-
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-
-                    const data = await res.json();
-                    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Informação não disponível';
-
-                    setGeminiData({ lyrics: content, chords: content });
-                    addDebugLog(`✅ Info carregada: ${track.title}`, 'success');
-                } catch (e) {
-                    setGeminiData({ lyrics: 'Erro ao carregar', chords: 'Erro ao carregar' });
-                    addDebugLog(`❌ Erro Gemini: ${e.message}`, 'error');
-                } finally {
-                    setIsGeminiLoading(false);
                 }
             };
 
@@ -752,11 +676,6 @@ NÃO forneça letra completa. Apenas informações educacionais.`;
                         youtubeRef.current.contentWindow.postMessage(
                             JSON.stringify({ event: 'command', func }), '*'
                         );
-
-                        // Se mutou, toca o áudio Via Cristais
-                        if (newMuted) {
-                            playViaCristaisAudio();
-                        }
                     } catch (e) { }
                 }
             };
@@ -791,53 +710,6 @@ NÃO forneça letra completa. Apenas informações educacionais.`;
                     }
                 }
             }, [currentTrack, isPlaying]);
-
-            // Detector automático de propaganda
-            useEffect(() => {
-                if (!currentTrack || !isPlaying || sourceMode !== 'youtube') {
-                    stopViaCristaisLoop();
-                    return;
-                }
-
-                // Aguarda 3 segundos após música iniciar
-                const muteTimer = setTimeout(() => {
-                    addDebugLog('🔇 Mutando possível propaganda...', 'warn');
-
-                    // Muta o YouTube
-                    if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                        try {
-                            youtubeRef.current.contentWindow.postMessage(
-                                JSON.stringify({ event: 'command', func: 'mute' }), '*'
-                            );
-                            setIsMuted(true);
-                        } catch (e) { }
-                    }
-
-                    // Inicia loop Via Cristais
-                    startViaCristaisLoop();
-
-                    // Após 12 segundos, assume que música começou e desmuta
-                    setTimeout(() => {
-                        addDebugLog('🔊 Desmutando - música iniciada', 'success');
-                        if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                            try {
-                                youtubeRef.current.contentWindow.postMessage(
-                                    JSON.stringify({ event: 'command', func: 'unMute' }), '*'
-                                );
-                                setIsMuted(false);
-                            } catch (e) { }
-                        }
-                        stopViaCristaisLoop();
-                    }, 12000); // 12 segundos total (3 + 9)
-
-                }, 3000); // Aguarda 3s
-
-                return () => {
-                    clearTimeout(muteTimer);
-                    stopViaCristaisLoop();
-                };
-            }, [currentTrack, isPlaying, sourceMode]);
-
 
             const getYoutubeEmbed = () => {
                 if (!currentTrack || !currentTrack.youtubeId) return '';
