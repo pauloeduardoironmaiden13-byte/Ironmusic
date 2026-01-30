@@ -3,7 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.7, maximum-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>IronMusic - Rock Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -16,15 +19,42 @@
         rel="stylesheet">
 
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         :root {
             --glass-border: rgba(255, 255, 255, 0.08);
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background: #000;
-            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             overflow-x: hidden;
+            background: #000;
+            color: #fff;
+            touch-action: manipulation;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px;
+            }
+
+            h1 {
+                font-size: 1.5rem !important;
+            }
+
+            h2 {
+                font-size: 1.25rem !important;
+            }
+
+            .music-card {
+                padding: 0.5rem !important;
+            }
         }
 
         .rock-font {
@@ -120,24 +150,32 @@
         input[type="range"] {
             -webkit-appearance: none;
             appearance: none;
-            background: transparent;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.2);
             cursor: pointer;
+            touch-action: none;
         }
 
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 14px;
-            height: 14px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
             background: white;
             cursor: pointer;
-            margin-top: -5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
-        input[type="range"]::-webkit-slider-runnable-track {
-            height: 4px;
-            border-radius: 2px;
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
         /* Vinyl Disc Effect - Realistic with center label */
@@ -203,6 +241,26 @@
             border-radius: 50% !important;
             z-index: 4 !important;
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.9), 0 0 3px rgba(255, 255, 255, 0.3) !important;
+        }
+
+        /* Mini Player */
+        .mini-player {
+            position: fixed;
+            bottom: 60px;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 40;
+            padding: 0.75rem 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .mini-player {
+                bottom: 56px;
+                padding: 0.5rem 0.75rem;
+            }
         }
 
         /* Context Menu */
@@ -553,7 +611,9 @@
             const selectTrackFromSearch = async (track) => {
                 setLoadingTracks(true);
                 try {
-                    // Check if already in cache
+                    console.log('Searching YouTube for:', track);
+
+                    // Check if already in cache (Firebase)
                     let cachedTrack = null;
                     if (db) {
                         const snapshot = await db.collection('song_cache')
@@ -562,11 +622,13 @@
                             .get();
                         if (!snapshot.empty) {
                             cachedTrack = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+                            console.log('Found in cache:', cachedTrack);
                         }
                     }
 
                     if (cachedTrack && cachedTrack.youtubeId) {
                         // Use cached track
+                        console.log('Using cached YouTube ID:', cachedTrack.youtubeId);
                         setCurrentTrack(cachedTrack);
                         setCurrentIndex(0);
                         setIsPlaying(true);
@@ -575,11 +637,17 @@
                     } else {
                         // Fetch YouTube ID
                         const query = `${track.artist} ${track.title} official audio`;
-                        const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&key=${YOUTUBE_API_KEY}`);
+                        console.log('YouTube search query:', query);
+
+                        const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&key=${YOUTUBE_API_KEY}&maxResults=1`);
                         const ytData = await ytRes.json();
+
+                        console.log('YouTube API response:', ytData);
 
                         if (ytData.items && ytData.items.length > 0) {
                             const youtubeId = ytData.items[0].id.videoId;
+                            console.log('Found YouTube ID:', youtubeId);
+
                             const newTrack = {
                                 ...track,
                                 youtubeId,
@@ -591,6 +659,7 @@
                             if (db) {
                                 const docRef = await db.collection('song_cache').add(newTrack);
                                 newTrack.id = docRef.id;
+                                console.log('Saved to Firebase with ID:', docRef.id);
                             }
 
                             setCurrentTrack(newTrack);
@@ -600,12 +669,13 @@
                             setView('home');
                             loadMusicLibrary();
                         } else {
-                            alert('Música não encontrada no YouTube');
+                            console.error('No YouTube results found');
+                            alert('Música não encontrada no YouTube. Tente outra.');
                         }
                     }
                 } catch (e) {
                     console.error('Error selecting track:', e);
-                    alert('Erro ao carregar música');
+                    alert(`Erro ao carregar música: ${e.message}`);
                 } finally {
                     setLoadingTracks(false);
                 }
