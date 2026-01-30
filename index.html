@@ -339,7 +339,34 @@
         };
 
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A";
-        const YOUTUBE_API_KEY = "AIzaSyBkKxlcuOU5Q6MU7ma9lAW2WHTr2Fth4JQ";
+
+        // Sistema de rotação de 3 chaves API - 300 pesquisas/dia (100 por chave)
+        const YOUTUBE_API_KEYS = [
+            "AIzaSyCWYR0b-5qGWk7Eto4h5sZIErelcd5_bfg",  // Chave 1
+            "AIzaSyB5OFcKTtj4S7jd65SEJOmv8UAPDihgb9o",  // Chave 2
+            "AIzaSyB_pXiKr3mJOZbyKX8OBLLL7s4z9mLdn2Y"   // Chave 3
+        ];
+        let currentKeyIndex = 0;
+        let keyUsageCount = [0, 0, 0]; // Contador de uso de cada chave
+
+        // Função para obter a chave atual
+        const getYouTubeAPIKey = () => {
+            return YOUTUBE_API_KEYS[currentKeyIndex];
+        };
+
+        // Função para rotacionar para a próxima chave
+        const rotateAPIKey = () => {
+            const previousIndex = currentKeyIndex;
+            currentKeyIndex = (currentKeyIndex + 1) % YOUTUBE_API_KEYS.length;
+            console.log(`🔄 Rotacionando chave API: ${previousIndex + 1} → ${currentKeyIndex + 1}/${YOUTUBE_API_KEYS.length}`);
+            return getYouTubeAPIKey();
+        };
+
+        // Função para registrar uso da chave
+        const logKeyUsage = () => {
+            keyUsageCount[currentKeyIndex]++;
+            console.log(`📊 Uso de chaves: [${keyUsageCount.join(', ')}] | Total: ${keyUsageCount.reduce((a, b) => a + b, 0)}`);
+        };
 
         let db = null;
         try {
@@ -649,6 +676,10 @@
 
             const selectTrackFromSearch = async (track) => {
                 setLoadingTracks(true);
+                let lastError = null;
+                let attemptCount = 0;
+                const maxAttempts = YOUTUBE_API_KEYS.length; // Tenta com todas as chaves disponíveis
+
                 try {
                     addDebugLog(`🎵 Selecionando: ${track.title} - ${track.artist}`, 'info');
                     console.log('🎵 Selecionando música:', track);
@@ -656,87 +687,147 @@
                     // Fecha modal e mostra loading
                     setView('home');
 
-                    // Busca YouTube ID via API
+                    // Busca YouTube ID via API com retry automático
                     const searchQuery = `${track.artist} ${track.title} official audio`;
                     console.log('🔍 Buscando no YouTube:', searchQuery);
 
-                    const res = await fetch(
-                        `https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${YOUTUBE_API_KEY}&type=video&videoEmbeddable=true&videoCategoryId=10&maxResults=1`
-                    );
+                    let data = null;
+                    let youtubeId = null;
 
-                    console.log('📡 Status da API:', res.status, res.statusText);
-                    addDebugLog(`📡 API Status: ${res.status}`, res.ok ? 'success' : 'error');
+                    // Loop de tentativas com rotação de chaves
+                    while (attemptCount < maxAttempts) {
+                        const currentKey = getYouTubeAPIKey();
+                        const keyNumber = currentKeyIndex + 1;
 
-                    if (!res.ok) {
-                        const errorText = await res.text();
-                        console.error('❌ Resposta de erro completa:', errorText);
-                        addDebugLog(`❌ API Erro: ${res.status} - ${errorText.substring(0, 100)}`, 'error');
+                        console.log(`🔑 Tentativa ${attemptCount + 1}/${maxAttempts} com Chave ${keyNumber}`);
+                        addDebugLog(`🔑 Usando Chave ${keyNumber}`, 'info');
 
-                        // Tenta parsear o erro JSON
                         try {
-                            const errorData = JSON.parse(errorText);
-                            console.error('📋 Detalhes do erro:', errorData);
-                            if (errorData.error?.message) {
-                                addDebugLog(`💬 Mensagem: ${errorData.error.message}`, 'error');
-                                showToast(`❌ YouTube API: ${errorData.error.message}`);
+                            const res = await fetch(
+                                `https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${currentKey}&type=video&videoEmbeddable=true&videoCategoryId=10&maxResults=1`
+                            );
+
+                            console.log('📡 Status da API:', res.status, res.statusText);
+                            addDebugLog(`📡 API Status: ${res.status}`, res.ok ? 'success' : 'error');
+
+                            if (!res.ok) {
+                                const errorText = await res.text();
+
+                                // Tenta parsear o erro JSON
+                                let errorData = null;
+                                try {
+                                    errorData = JSON.parse(errorText);
+                                    console.error('📋 Detalhes do erro:', errorData);
+                                } catch (parseError) {
+                                    console.error('Erro ao parsear resposta:', parseError);
+                                }
+
+                                // Verifica se é erro de quota (403)
+                                if (res.status === 403 && errorData?.error?.message?.includes('quota')) {
+                                    console.warn(`⚠️ Quota esgotada na Chave ${keyNumber}. Rotacionando...`);
+                                    addDebugLog(`⚠️ Quota esgotada! Tentando Chave ${keyNumber + 1}`, 'error');
+
+                                    // Rotaciona para próxima chave
+                                    rotateAPIKey();
+                                    attemptCount++;
+                                    lastError = new Error(`Quota esgotada na chave ${keyNumber}`);
+                                    continue; // Tenta novamente com próxima chave
+                                } else {
+                                    // Outro tipo de erro - lança exceção
+                                    console.error('❌ Resposta de erro completa:', errorText);
+                                    addDebugLog(`❌ API Erro: ${res.status} - ${errorText.substring(0, 100)}`, 'error');
+
+                                    if (errorData?.error?.message) {
+                                        addDebugLog(`💬 Mensagem: ${errorData.error.message}`, 'error');
+                                    }
+
+                                    throw new Error(`YouTube API retornou erro ${res.status}`);
+                                }
                             }
+
+                            // Sucesso! Registra uso da chave
+                            logKeyUsage();
+
+                            data = await res.json();
+                            console.log('📺 Resposta YouTube API:', data);
+                            addDebugLog(`📺 YouTube API: ${data.items?.length || 0} resultados`, 'info');
+
+                            if (data.items && data.items.length > 0) {
+                                youtubeId = data.items[0].id.videoId;
+                                console.log('✅ YouTube ID encontrado:', youtubeId);
+                                addDebugLog(`✅ YouTube ID: ${youtubeId}`, 'success');
+                                break; // Sucesso - sai do loop
+                            } else {
+                                console.error('❌ Nenhum vídeo encontrado no YouTube');
+                                throw new Error('Música não encontrada no YouTube');
+                            }
+
+                        } catch (fetchError) {
+                            // Se não for erro de quota, propaga exceção
+                            if (!fetchError.message?.includes('quota')) {
+                                throw fetchError;
+                            }
+                            lastError = fetchError;
+                            attemptCount++;
+                        }
+                    }
+
+                    // Se esgotou todas as tentativas
+                    if (!youtubeId) {
+                        console.error('❌ Todas as chaves API esgotaram a quota!');
+                        addDebugLog('❌ Todas as 3 chaves sem quota!', 'error');
+                        alert('⚠️ Limite de buscas atingido em todas as chaves API. Tente novamente amanhã ou adicione mais chaves.');
+                        return;
+                    }
+
+                    // Cria objeto completo de música
+                    const newSong = {
+                        id: `${track.collectionId}-${Date.now()}`,
+                        title: track.title,
+                        artist: track.artist,
+                        youtubeId: youtubeId,
+                        artwork: track.artwork,
+                        albumName: track.albumName || 'Desconhecido',
+                        liked: false,
+                        addedAt: new Date().toISOString(),
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    // Salva no Firebase
+                    if (db) {
+                        try {
+                            const docRef = await db.collection('song_cache').add(newSong);
+                            newSong.id = docRef.id;
+
+                            console.log('💾 ============ FIREBASE SAVE ============');
+                            console.log('💾 Documento salvo com ID:', docRef.id);
+                            console.log('💾 YouTube ID salvo:', youtubeId);
+                            console.log('💾 Título:', track.title);
+                            console.log('💾 Artista:', track.artist);
+                            console.log('💾 ========================================');
+
+                            addDebugLog(`💾 Firebase ID: ${docRef.id}`, 'success');
+                            addDebugLog(`🎬 YouTube ID: ${youtubeId}`, 'success');
                         } catch (e) {
-                            console.error('Erro ao parsear resposta:', e);
+                            console.error('❌ Erro ao salvar no Firebase:', e);
+                            addDebugLog(`❌ Erro Firebase: ${e.message}`, 'error');
                         }
-
-                        throw new Error(`YouTube API retornou erro ${res.status}`);
                     }
 
-                    const data = await res.json();
-                    console.log('📺 Resposta YouTube API:', data);
-                    addDebugLog(`📺 YouTube API: ${data.items?.length || 0} resultados`, 'info');
+                    // Atualiza estados
+                    setCurrentTrack(newSong);
+                    setCurrentIndex(0);
+                    setIsPlaying(true);
+                    setShowFullScreenPlayer(false);
 
-                    if (data.items && data.items.length > 0) {
-                        const youtubeId = data.items[0].id.videoId;
-                        console.log('✅ YouTube ID encontrado:', youtubeId);
-                        addDebugLog(`✅ YouTube ID: ${youtubeId}`, 'success');
+                    // Recarrega biblioteca
+                    loadMusicLibrary();
 
-                        // Cria objeto completo de música
-                        const newSong = {
-                            id: `${track.collectionId}-${Date.now()}`,
-                            title: track.title,
-                            artist: track.artist,
-                            youtubeId: youtubeId,
-                            artwork: track.artwork,
-                            albumName: track.albumName || 'Desconhecido',
-                            liked: false,
-                            addedAt: new Date().toISOString()
-                        };
+                    console.log('🎸 Tocando agora:', newSong.title);
 
-                        // Salva no Firebase
-                        if (db) {
-                            try {
-                                const docRef = await db.collection('song_cache').add(newSong);
-                                newSong.id = docRef.id;
-                                console.log('💾 Salvo no Firebase com ID:', docRef.id);
-                                addDebugLog(`💾 Salvo Firebase: ${track.title} -> ID: ${docRef.id}`, 'success');
-                            } catch (e) {
-                                console.error('❌ Erro ao salvar no Firebase:', e);
-                                addDebugLog(`❌ Erro Firebase: ${e.message}`, 'error');
-                            }
-                        }
-
-                        // Atualiza estados
-                        setCurrentTrack(newSong);
-                        setCurrentIndex(0);
-                        setIsPlaying(true);
-                        setShowFullScreenPlayer(false);
-
-                        // Recarrega biblioteca
-                        loadMusicLibrary();
-
-                        console.log('🎸 Tocando agora:', newSong.title);
-                    } else {
-                        console.error('❌ Nenhum vídeo encontrado no YouTube');
-                        alert('Música não encontrada no YouTube. Tente outra.');
-                    }
                 } catch (e) {
                     console.error('❌ Erro ao buscar/salvar:', e);
+                    addDebugLog(`❌ Erro: ${e.message}`, 'error');
                     alert(`Erro: ${e.message}`);
                 } finally {
                     setLoadingTracks(false);
