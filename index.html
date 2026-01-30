@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=0.8, maximum-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=0.7, maximum-scale=1.0, user-scalable=yes">
     <title>IronMusic - Rock Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -191,6 +191,20 @@
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.5) !important;
         }
 
+        /* Vinyl center hole */
+        .vinyl-hole {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 15% !important;
+            height: 15% !important;
+            background: #000 !important;
+            border-radius: 50% !important;
+            z-index: 4 !important;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.9), 0 0 3px rgba(255, 255, 255, 0.3) !important;
+        }
+
         /* Context Menu */
         .context-menu {
             position: fixed;
@@ -269,7 +283,7 @@
 
         function App() {
             const [view, setView] = useState('home');
-            const [activeTheme, setActiveTheme] = useState('yellow');
+            const [activeTheme, setActiveTheme] = useState('gray');
             const [currentTrack, setCurrentTrack] = useState(null);
             const [isPlaying, setIsPlaying] = useState(false);
             const [currentTime, setCurrentTime] = useState(0);
@@ -297,20 +311,16 @@
             useEffect(() => {
                 loadMusicLibrary();
 
-                // Update progress bar from YouTube
+                // Update progress bar from YouTube - more frequent updates
                 if (isPlaying && youtubeRef.current) {
                     progressInterval.current = setInterval(() => {
                         if (youtubeRef.current && youtubeRef.current.contentWindow) {
                             youtubeRef.current.contentWindow.postMessage(
-                                JSON.stringify({ event: 'command', func: 'getCurrentTime' }),
-                                '*'
-                            );
-                            youtubeRef.current.contentWindow.postMessage(
-                                JSON.stringify({ event: 'command', func: 'getDuration' }),
+                                JSON.stringify({ event: 'listening', id: 1 }),
                                 '*'
                             );
                         }
-                    }, 1000);
+                    }, 500);  // Update every 500ms for smoother progress
                 } else {
                     if (progressInterval.current) {
                         clearInterval(progressInterval.current);
@@ -511,17 +521,31 @@
                 setBandInfo({ artist, content: '', loading: true });
                 setShowBandInfo(true);
                 try {
-                    const prompt = `Forneça informações detalhadas sobre a banda "${artist}" em português, incluindo: história, membros (atuais e passados), principais álbuns com anos de lançamento, e curiosidades interessantes.`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-                    const data = await res.json();
-                    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Não disponível';
+                    // Try Wikipedia API first
+                    const wikiSearch = await fetch(`https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=extracts&exintro=1&explaintext=1&titles=${encodeURIComponent(artist)}`);
+                    const wikiData = await wikiSearch.json();
+                    const pages = wikiData.query?.pages;
+                    const pageId = Object.keys(pages)[0];
+                    let content = '';
+
+                    if (pageId !== '-1' && pages[pageId]?.extract) {
+                        content = pages[pageId].extract;
+                    } else {
+                        // Fallback to Gemini
+                        const prompt = `Forneça um resumo detalhado sobre a banda "${artist}" em português com:\n\n1. **História da Banda**: Como foi formada, principais fases\n2. **Integrantes**: Membros atuais e ex-membros importantes com seus instrumentos\n3. **Álbuns Principais**: Liste 5-7 álbuns mais importantes com anos\n4. **Curiosidades**: 2-3 fatos interessantes\n\nFormate de forma clara e organizada.`;
+                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                        });
+                        const data = await res.json();
+                        content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Não disponível';
+                    }
+
                     setBandInfo({ artist, content, loading: false });
                 } catch (e) {
-                    setBandInfo({ artist, content: 'Erro ao carregar', loading: false });
+                    console.error('Erro ao buscar info:', e);
+                    setBandInfo({ artist, content: 'Erro ao carregar informações. Tente novamente.', loading: false });
                 }
             };
 
@@ -589,10 +613,16 @@
                 return `${mins}:${secs.toString().padStart(2, '0')}`;
             };
 
+            const themes = [
+                { name: 'gray', color: 'bg-gray-400', bgImage: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1920' },
+                { name: 'blue', color: 'bg-blue-500', bgImage: 'https://i.pinimg.com/originals/85/88/f4/8588f4a8f0c3c1d8aa65e5e8c80a8c7d.jpg' },
+                { name: 'yellow', color: 'bg-yellow-500', bgImage: 'https://i.pinimg.com/originals/2c/88/65/2c88651c1c02b9f1e16e6b373e9b0c6a.jpg' }
+            ];
+
             const themeColors = {
-                yellow: 'text-yellow-500',
-                purple: 'text-purple-500',
-                green: 'text-green-500'
+                gray: 'text-gray-400',
+                blue: 'text-blue-500',
+                yellow: 'text-yellow-500'
             };
 
             const groupedByArtist = musicLibrary.reduce((acc, song) => {
@@ -645,6 +675,7 @@
                                             >
                                                 <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
                                                     <img src={song.artwork} className="vinyl-label" alt={song.title} />
+                                                    <div className="vinyl-hole"></div>
                                                 </div>
                                                 <h4 className="font-bold text-sm truncate">{song.title}</h4>
                                                 <p className="text-xs text-gray-400 truncate">{song.artist}</p>
@@ -668,6 +699,7 @@
                                                         >
                                                             <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
                                                                 <img src={song.artwork} className="vinyl-label" alt={song.title} />
+                                                                <div className="vinyl-hole"></div>
                                                             </div>
                                                             <h4 className="font-bold text-sm truncate">{song.title}</h4>
                                                         </div>
@@ -806,6 +838,7 @@
                             <div className="flex-1 flex items-center justify-center relative z-10">
                                 <div className={`w-96 h-96 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
                                     <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} />
+                                    <div className="vinyl-hole"></div>
                                 </div>
                             </div>
                             <div className="p-8 space-y-4 relative z-10">
@@ -884,6 +917,7 @@
                                 <div className="flex items-center gap-3">
                                     <div className={`w-10 h-10 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
                                         <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} style={{ width: '45%', height: '45%' }} />
+                                        <div className="vinyl-hole" style={{ width: '15%', height: '15%' }}></div>
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold truncate">{currentTrack.title}</p>
