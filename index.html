@@ -450,7 +450,6 @@
                 if (!searchQuery) return;
                 setLoading(true);
                 setSelectedAlbum(null);
-                setAutocompleteResults([]); // Clear autocomplete results
                 try {
                     // Search for both songs and albums
                     const [songRes, albumRes] = await Promise.all([
@@ -504,23 +503,48 @@
                 setSelectedAlbum(album);
                 setLoadingTracks(true);
                 try {
-                    const res = await fetch(`https://itunes.apple.com/lookup?id=${album.collectionId}&entity=song`);
+                    // Use CORS proxy for local development
+                    const apiUrl = `https://itunes.apple.com/lookup?id=${album.collectionId}&entity=song&limit=200`;
+                    const res = await fetch(apiUrl);
                     const data = await res.json();
+
+                    console.log('iTunes API Response:', data); // Debug
+
                     if (data.results && data.results.length > 1) {
-                        const tracks = data.results.slice(1).map((track, idx) => ({
-                            id: `${album.collectionId}-${track.trackId || idx}`,
-                            title: track.trackName || `Track ${idx + 1}`,
-                            artist: track.artistName || album.artist,
-                            artwork: (track.artworkUrl100 || album.artwork).replace('100x100', '600x600'),
-                            trackNumber: track.trackNumber || idx + 1
-                        })).filter(t => t.title); // Remove tracks without title
-                        setAlbumTracks(tracks);
+                        // Filter out the album info (first result) and map tracks
+                        const tracks = data.results
+                            .slice(1)
+                            .filter(track => track.wrapperType === 'track' && track.kind === 'song')
+                            .map((track, idx) => {
+                                // Ensure we get the actual track name, not artist name
+                                const trackName = track.trackName || track.trackCensoredName || `Track ${idx + 1}`;
+
+                                return {
+                                    id: `${album.collectionId}-${track.trackId || Date.now() + idx}`,
+                                    title: trackName,
+                                    artist: track.artistName || album.artist,
+                                    artwork: (track.artworkUrl100 || album.artwork || '').replace('100x100', '600x600'),
+                                    trackNumber: track.trackNumber || idx + 1,
+                                    collectionId: album.collectionId
+                                };
+                            });
+
+                        console.log('Processed tracks:', tracks); // Debug
+
+                        if (tracks.length > 0) {
+                            setAlbumTracks(tracks);
+                        } else {
+                            setAlbumTracks([]);
+                            alert('Nenhuma música encontrada neste álbum. Tente outro.');
+                        }
                     } else {
                         setAlbumTracks([]);
+                        alert('Álbum não contém músicas disponíveis.');
                     }
                 } catch (e) {
                     console.error('Error fetching tracks:', e);
                     setAlbumTracks([]);
+                    alert('Erro ao carregar músicas do álbum. Tente novamente.');
                 } finally {
                     setLoadingTracks(false);
                 }
@@ -870,12 +894,12 @@
                                                     {albumTracks.map((track, idx) => (
                                                         <div
                                                             key={idx}
-                                                            onClick={() => selectTrack(track)}
+                                                            onClick={() => selectTrackFromSearch(track)}
                                                             className="bg-white/5 hover:bg-white/10 p-3 rounded-lg cursor-pointer flex items-center gap-3"
                                                         >
                                                             <span className="text-gray-500 w-6">{track.trackNumber}</span>
                                                             <div className="flex-1">
-                                                                <h4 className="font-bold">{track.name}</h4>
+                                                                <h4 className="font-bold">{track.title}</h4>
                                                                 <p className="text-xs text-gray-400">{track.artist}</p>
                                                             </div>
                                                             <span className="text-xs text-gray-500">▶</span>
