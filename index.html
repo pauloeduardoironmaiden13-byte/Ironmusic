@@ -664,7 +664,26 @@
                         `https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${YOUTUBE_API_KEY}&type=video&videoEmbeddable=true&videoCategoryId=10&maxResults=1`
                     );
 
+                    console.log('📡 Status da API:', res.status, res.statusText);
+                    addDebugLog(`📡 API Status: ${res.status}`, res.ok ? 'success' : 'error');
+
                     if (!res.ok) {
+                        const errorText = await res.text();
+                        console.error('❌ Resposta de erro completa:', errorText);
+                        addDebugLog(`❌ API Erro: ${res.status} - ${errorText.substring(0, 100)}`, 'error');
+
+                        // Tenta parsear o erro JSON
+                        try {
+                            const errorData = JSON.parse(errorText);
+                            console.error('📋 Detalhes do erro:', errorData);
+                            if (errorData.error?.message) {
+                                addDebugLog(`💬 Mensagem: ${errorData.error.message}`, 'error');
+                                showToast(`❌ YouTube API: ${errorData.error.message}`);
+                            }
+                        } catch (e) {
+                            console.error('Erro ao parsear resposta:', e);
+                        }
+
                         throw new Error(`YouTube API retornou erro ${res.status}`);
                     }
 
@@ -1270,6 +1289,36 @@
                                 </button>
                             </div>
                         </div>
+
+                        {/* 🐛 DEBUG CONSOLE - MONITOR FIREBASE */}
+                        {showDebugConsole && debugLogs.length > 0 && (
+                            <div className="debug-console">
+                                <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/20">
+                                    <span className="text-white font-bold text-xs">🐛 Firebase Monitor</span>
+                                    <button onClick={() => setShowDebugConsole(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                                </div>
+                                <div className="space-y-1">
+                                    {debugLogs.map((log, idx) => (
+                                        <div key={idx} className={`text-[9px] ${log.type === 'success' ? 'text-green-400' :
+                                            log.type === 'error' ? 'text-red-400' :
+                                                log.type === 'warn' ? 'text-yellow-400' :
+                                                    'text-gray-300'
+                                            }`}>
+                                            {log.msg}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {!showDebugConsole && (
+                            <button
+                                onClick={() => setShowDebugConsole(true)}
+                                className="fixed bottom-24 right-4 bg-white/10 hover:bg-white/20 p-2 rounded-full text-xs z-150 border border-white/20"
+                                title="Mostrar Firebase Monitor"
+                            >
+                                🐛
+                            </button>
+                        )}
                     </div>
 
                     {/* Context Menu */}
