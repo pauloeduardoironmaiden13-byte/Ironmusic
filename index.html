@@ -3,84 +3,77 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
-    <title>IronMusic AI - Player</title>
-
-    <!-- Tailwind CSS -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IronMusic - Rock Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-
-    <!-- Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- Firebase SDKs (RESTAURADOS) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Fontes -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Oswald:wght@500;700&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Metal+Mania&family=Inter:wght@400;600;800&display=swap"
         rel="stylesheet">
 
     <style>
+        :root {
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #000;
+            background: #000;
             color: white;
-            -webkit-tap-highlight-color: transparent;
-            overflow: hidden;
+            overflow-x: hidden;
         }
 
-        h1,
-        h2,
-        h3,
         .rock-font {
-            font-family: 'Oswald', sans-serif;
+            font-family: 'Metal Mania', cursive;
         }
 
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+        .glass-nav {
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
         }
 
-        .gradient-spot {
-            position: absolute;
-            top: -100px;
-            left: -100px;
-            width: 400px;
-            height: 400px;
-            border-radius: 50%;
-            filter: blur(80px);
+        .bg-wallpaper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            opacity: 0.5;
+            /* AUMENTADO para 0.5 */
             z-index: 0;
-            opacity: 0.6;
-            pointer-events: none;
-            transition: background 0.5s ease;
+            transition: opacity 0.5s ease;
         }
 
-        .theme-yellow-spot {
-            background: radial-gradient(circle, #854d0e 0%, transparent 70%);
+        .bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            /* REDUZIDO para 30% */
+            z-index: 1;
         }
 
-        .theme-purple-spot {
-            background: radial-gradient(circle, #581c87 0%, transparent 70%);
+        .bg-yellow {
+            background-image: url('https://wallpapercave.com/wp/ZA2hmZU.jpg');
         }
 
-        .theme-green-spot {
-            background: radial-gradient(circle, #14532d 0%, transparent 70%);
+        .bg-purple {
+            background-image: url('https://www.portaldoinferno.com.br/wp-content/uploads/2020/06/wallpaper-iron-maiden-the-final-frontier-4k-download.jpg');
         }
 
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #fff;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
+        .bg-green {
+            background-image: url('https://i.pinimg.com/1200x/f6/4b/57/f64b573b709235d4aefc07ba709fd877.jpg');
         }
 
         @keyframes spin {
@@ -93,161 +86,126 @@
             }
         }
 
-        .vinyl-spin {
-            animation: spin 8s linear infinite;
+        .spin-slow {
+            animation: spin 10s linear infinite;
         }
 
-        .vinyl-paused {
-            animation-play-state: paused;
+        .music-card {
+            transition: all 0.3s ease;
         }
 
-        .vinyl-texture {
-            background: repeating-radial-gradient(#111 0, #111 2px, #222 3px, #222 4px);
+        .music-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 24px rgba(255, 255, 255, 0.1);
         }
 
-        .toast {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(50, 50, 50, 0.9);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 12px;
-            z-index: 100;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
+        ::-webkit-scrollbar {
+            width: 8px;
         }
 
-        .toast.show {
-            opacity: 1;
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
         }
 
-        .admin-modal {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 200;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            animation: fadeIn 0.2s;
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
         }
 
-        .debug-console {
-            position: fixed;
-            bottom: 80px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            padding: 10px;
-            max-width: 300px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-size: 10px;
-            font-family: monospace;
-            z-index: 150;
-        }
-
-        .debug-console::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .debug-console::-webkit-scrollbar-thumb {
+        ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Progress bar styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            margin-top: -5px;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 4px;
             border-radius: 2px;
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-
-            to {
-                opacity: 1;
-            }
+        /* Vinyl Disc Effect */
+        .vinyl-disc {
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.3);
         }
 
-        @keyframes pulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
-            }
-
-            50% {
-                transform: scale(1.05);
-                box-shadow: 0 0 30px 10px rgba(255, 255, 255, 0.2);
-            }
+        .vinyl-disc::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30%;
+            height: 30%;
+            background: radial-gradient(circle, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 70%);
+            border-radius: 50%;
+            z-index: 1;
         }
 
-        @keyframes vibrate {
-
-            0%,
-            100% {
-                transform: translate(0, 0) rotate(0deg);
-            }
-
-            10% {
-                transform: translate(-2px, -2px) rotate(-1deg);
-            }
-
-            20% {
-                transform: translate(2px, 2px) rotate(1deg);
-            }
-
-            30% {
-                transform: translate(-2px, 2px) rotate(-1deg);
-            }
-
-            40% {
-                transform: translate(2px, -2px) rotate(1deg);
-            }
-
-            50% {
-                transform: translate(-2px, -2px) rotate(-1deg);
-            }
-
-            60% {
-                transform: translate(2px, 2px) rotate(1deg);
-            }
-
-            70% {
-                transform: translate(-2px, 2px) rotate(-1deg);
-            }
-
-            80% {
-                transform: translate(2px, -2px) rotate(1deg);
-            }
-
-            90% {
-                transform: translate(-2px, -2px) rotate(-1deg);
-            }
+        .vinyl-disc::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-conic-gradient(from 0deg,
+                    rgba(255, 255, 255, 0.03) 0deg,
+                    rgba(255, 255, 255, 0.03) 2deg,
+                    transparent 2deg,
+                    transparent 4deg);
+            border-radius: 50%;
+            pointer-events: none;
         }
 
-        @keyframes glowPulse {
-
-            0%,
-            100% {
-                filter: brightness(1) saturate(1);
-            }
-
-            50% {
-                filter: brightness(1.2) saturate(1.3);
-            }
+        /* Context Menu */
+        .context-menu {
+            position: fixed;
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 4px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            min-width: 150px;
         }
 
-        .album-cover-animated {
-            animation: pulse 2s ease-in-out infinite, vibrate 0.3s ease-in-out infinite;
+        .context-menu-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
         }
 
-        .album-cover-glow {
-            animation: glowPulse 1.5s ease-in-out infinite;
+        .context-menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .context-menu-item.danger {
+            color: #ef4444;
+        }
+
+        .context-menu-item.danger:hover {
+            background: rgba(239, 68, 68, 0.2);
         }
     </style>
 </head>
@@ -258,367 +216,230 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- SUAS CHAVES ---
-        const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A";
-        const YOUTUBE_API_KEY = "AIzaSyBkKxlcuOU5Q6MU7ma9lAW9WHTr2Fth4JQ";
-
-        // --- CONFIGURAÇÃO FIREBASE (NOVO PROJETO) ---
         const firebaseConfig = {
             apiKey: "AIzaSyDCmlwWC1GH5CUa2ZdiPGqBccAfPkUiTp8",
             authDomain: "ironmusic-73c33.firebaseapp.com",
             projectId: "ironmusic-73c33",
             storageBucket: "ironmusic-73c33.firebasestorage.app",
             messagingSenderId: "381707229330",
-            appId: "1:381707229330:web:9d52be0330255472c72e4b",
-            measurementId: "G-B8VZD117SX"
+            appId: "1:381707229330:web:9d52be0330255472c72e4b"
         };
 
+        const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A";
+        const YOUTUBE_API_KEY = "AIzaSyBkKxlcuOU5Q6MU7ma9lAW9WHTr2Fth4JQ";
 
-        // Inicialização do Firebase
         let db = null;
-        let auth = null;
-        let isFirebaseActive = false;
-
         try {
             if (typeof firebase !== 'undefined' && firebase.apps.length === 0) {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
-                console.log("✅ Firebase conectado com sucesso!");
-                isFirebaseActive = true;
-            } else if (typeof firebase !== 'undefined') {
-                db = firebase.firestore();
-                console.log("✅ Firebase já inicializado!");
-                isFirebaseActive = true;
             }
         } catch (e) {
-            console.error("❌ Erro ao inicializar Firebase:", e);
-            console.warn("⚠️ Usando LocalStorage como fallback");
-            isFirebaseActive = false;
+            console.error("Firebase error:", e);
         }
 
-
         const Icons = {
-            Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>,
-            Search: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>,
-            Play: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg>,
-            Pause: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>,
-            Skip: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" /></svg>,
-            SkipBack: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="19 20 9 12 19 4 19 20" /><line x1="5" y1="19" x2="5" y2="5" /></svg>,
-            Heart: ({ filled, ...p }) => <svg {...p} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>,
-            ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>,
-            ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle" fontSize="14" fontWeight="bold">ABC</text></svg>,
-            Upload: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
-            ExternalLink: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+            Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>,
+            Search: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>,
+            Play: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>,
+            Pause: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>,
+            Skip: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2" /></svg>,
+            SkipBack: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20" /><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" strokeWidth="2" /></svg>,
+            ThumbsUp: ({ filled, ...p }) => <svg {...p} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M7 22V11M2 13v6a2 2 0 0 0 2 2h12.5a2.5 2.5 0 0 0 2.5-2.5v-6a2.5 2.5 0 0 0-2.5-2.5H10l1.5-6a2 2 0 0 0-2-2 2 2 0 0 0-2 2L7 11H4a2 2 0 0 0-2 2Z" /></svg>,
+            Guitar: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m11.9 12.1 4.514-4.514" /><path d="M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z" /><path d="m6 16 2 2" /><path d="M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z" /><circle cx="11.5" cy="12.5" r=".5" fill="currentColor" /></svg>,
+            ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7V5c0-1.1.9-2 2-2h2" /><path d="M17 3h2c1.1 0 2 .9 2 2v2" /><path d="M21 17v2c0 1.1-.9 2-2 2h-2" /><path d="M7 21H5c-1.1 0-2-.9-2-2v-2" /><path d="M7 8h8" /><path d="M7 12h10" /><path d="M7 16h6" /></svg>,
+            ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>,
+            Volume: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
         };
 
         function App() {
-            // Inicializa na tela de busca para facilitar o teste
-            const [view, setView] = useState('search');
+            const [view, setView] = useState('home');
             const [activeTheme, setActiveTheme] = useState('yellow');
-            const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(false);
-            const [isPlaying, setIsPlaying] = useState(false);
-            const [query, setQuery] = useState('');
-            const [searchResults, setSearchResults] = useState([]);
-            const [loading, setLoading] = useState(false);
-            const [toastMsg, setToastMsg] = useState('');
-
-            // Estado para controlar se a API está quebrada (Cota excedida/Erro)
-            const [isApiBroken, setIsApiBroken] = useState(false);
-            const [isFetchingId, setIsFetchingId] = useState(false);
-
-            const [sourceMode, setSourceMode] = useState('youtube');
-
             const [currentTrack, setCurrentTrack] = useState(null);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [currentTime, setCurrentTime] = useState(0);
+            const [duration, setDuration] = useState(0);
+            const [volume, setVolume] = useState(80);
+            const [showFullScreenPlayer, setShowFullScreenPlayer] = useState(false);
+            const [musicLibrary, setMusicLibrary] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [homeTab, setHomeTab] = useState('all');
+            const [searchQuery, setSearchQuery] = useState('');
+            const [searchResults, setSearchResults] = useState([]);
+            const [selectedAlbum, setSelectedAlbum] = useState(null);
+            const [albumTracks, setAlbumTracks] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [loadingTracks, setLoadingTracks] = useState(false);
+            const [bandInfo, setBandInfo] = useState(null);
+            const [showBandInfo, setShowBandInfo] = useState(false);
+            const [lyrics, setLyrics] = useState(null);
+            const [loadingLyrics, setLoadingLyrics] = useState(false);
+            const [contextMenu, setContextMenu] = useState(null);
 
-            const [geminiData, setGeminiData] = useState(null);
-            const [isGeminiLoading, setIsGeminiLoading] = useState(false);
-
-            // NOVOS ESTADOS - Admin e Debug
-            const [showAdminModal, setShowAdminModal] = useState(false);
-            const [showDebugConsole, setShowDebugConsole] = useState(true);
-            const [debugLogs, setDebugLogs] = useState([]);
-            const [firebaseStats, setFirebaseStats] = useState({ total: 0, songs: [] });
-
-            // Formulário Admin
-            const [adminForm, setAdminForm] = useState({ title: '', artist: '', youtubeId: '' });
-
-            // NOVOS ESTADOS - Player Avançado
-            const [musicLibrary, setMusicLibrary] = useState([]); // Biblioteca completa do Firebase
-            const [currentIndex, setCurrentIndex] = useState(0); // Índice da música atual na biblioteca
-            const [currentTime, setCurrentTime] = useState(0); // Tempo atual em segundos
-            const [duration, setDuration] = useState(0); // Duração total
-            const [volume, setVolume] = useState(100); // Volume 0-100
-            const [isMuted, setIsMuted] = useState(false);
-
-            // NOVOS ESTADOS - Recursos Avançados
-            const [bandInfo, setBandInfo] = useState(null); // Informações da banda
-            const [showBandInfo, setShowBandInfo] = useState(false); // Modal de info
-            const [bandAlbums, setBandAlbums] = useState([]); // Lista de álbuns da banda
-            const [showAlbumsModal, setShowAlbumsModal] = useState(false); // Modal mostrando álbuns
-            const [loadingAlbums, setLoadingAlbums] = useState(false); // Carregando álbuns
-            const [selectedAlbum, setSelectedAlbum] = useState(null); // Álbum selecionado
-            const [albumTracks, setAlbumTracks] = useState([]); // Músicas do álbum
-            const [loadingTracks, setLoadingTracks] = useState(false); // Carregando músicas
-
-            const audioRef = useRef(new Audio());
             const youtubeRef = useRef(null);
-            const fileInputRef = useRef(null);
 
-            const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
-
-            // FUNÇÃO DE DEBUG
-            const addDebugLog = (msg, type = 'info') => {
-                const timestamp = new Date().toLocaleTimeString('pt-BR');
-                const logEntry = `[${timestamp}] ${msg}`;
-                console.log(logEntry);
-                setDebugLogs(prev => [...prev.slice(-20), { msg: logEntry, type }]); // Mantém últimas 20 entradas
-            };
-
-            // --- HELPER: Gerar ID único para o cache ---
-            const generateCacheKey = (title, artist) => {
-                return `ironmusic_cache_${title}_${artist}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
-            };
-
-            // --- BUSCA ID DO VÍDEO (PRIORIDADE: FIREBASE -> LOCALSTORAGE -> API) ---
-            const fetchYoutubeId = async (title, artist) => {
-                const cacheKey = generateCacheKey(title, artist);
-                addDebugLog(`🔍 Buscando: ${title} - ${artist}`, 'info');
-
-                // 1. TENTA FIREBASE (NUVEM - PREFERIDO)
-                if (isFirebaseActive && db) {
-                    try {
-                        addDebugLog(`🔥 Tentando Firebase...`, 'info');
-                        const doc = await db.collection('song_cache').doc(cacheKey).get();
-                        if (doc.exists) {
-                            const cachedId = doc.data().youtubeId;
-                            addDebugLog(`✅ Firebase: ${cachedId}`, 'success');
-                            console.log(`[Firebase] ID encontrado na nuvem para ${title}: ${cachedId}`);
-                            return cachedId;
-                        } else {
-                            addDebugLog(`⚠️ Firebase: Não encontrado`, 'warn');
-                        }
-                    } catch (e) {
-                        addDebugLog(`❌ Firebase erro: ${e.message}`, 'error');
-                        console.warn("Erro ao ler Firebase, tentando LocalStorage...", e);
-                    }
-                }
-
-                // 2. TENTA LOCALSTORAGE (FALLBACK SE FIREBASE FALHAR/OFFLINE)
-                const cachedId = localStorage.getItem(cacheKey);
-                if (cachedId) {
-                    addDebugLog(`💾 LocalStorage: ${cachedId}`, 'success');
-                    console.log(`[LocalStorage] ID encontrado localmente para ${title}: ${cachedId}`);
-                    return cachedId;
-                }
-
-                // Se já sabemos que a API está com erro e não achamos no cache, retorna null
-                if (isApiBroken) {
-                    addDebugLog(`⛔ API bloqueada, usando fallback`, 'warn');
-                    return null;
-                }
-
-                // 3. BUSCA NORMAL NA API (SE NÃO ESTIVER EM NENHUM CACHE)
-                const q = encodeURIComponent(`${title} ${artist} official video`);
-                try {
-                    addDebugLog(`🌐 Tentando YouTube API...`, 'info');
-                    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${q}&type=video&videoEmbeddable=true&maxResults=1&key=${YOUTUBE_API_KEY}`);
-
-                    if (!res.ok) {
-                        addDebugLog(`❌ YouTube API: ${res.status}`, 'error');
-                        console.warn(`YouTube API Error ${res.status}. Switching to fallback mode.`);
-                        setIsApiBroken(true);
-                        return null;
-                    }
-
-                    const data = await res.json();
-                    if (data.items && data.items.length > 0) {
-                        const newId = data.items[0].id.videoId;
-
-                        // 4. SALVA NO CACHE PARA O FUTURO
-
-                        // Salva no Firebase (se ativo)
-                        if (isFirebaseActive && db) {
-                            db.collection('song_cache').doc(cacheKey).set({
-                                youtubeId: newId,
-                                title: title,
-                                artist: artist,
-                                createdAt: new Date()
-                            }).then(() => {
-                                addDebugLog(`✅ Salvo no Firebase: ${newId}`, 'success');
-                            }).catch(e => {
-                                addDebugLog(`❌ Erro ao salvar Firebase: ${e.message}`, 'error');
-                                console.warn("Erro ao salvar no Firebase:", e);
-                            });
-                            console.log(`[Firebase] Novo ID salvo na nuvem: ${newId}`);
-                        }
-
-                        // Salva no LocalStorage (sempre bom ter backup local)
-                        try {
-                            localStorage.setItem(cacheKey, newId);
-                        } catch (e) { }
-
-                        return newId;
-                    }
-                } catch (e) {
-                    addDebugLog(`❌ API erro: ${e.message}`, 'error');
-                    console.warn("Erro YT API", e);
-                    setIsApiBroken(true);
-                }
-                return null;
-            };
-
-            // --- FUNÇÕES DO PAINEL ADMIN ---
-            const loadFirebaseStats = async () => {
-                if (!isFirebaseActive || !db) return;
-                try {
-                    const snapshot = await db.collection('song_cache').get();
-                    const songs = [];
-                    snapshot.forEach(doc => {
-                        const data = doc.data();
-                        songs.push({ id: doc.id, ...data });
-                    });
-                    setFirebaseStats({ total: songs.length, songs });
-                    addDebugLog(`📊 ${songs.length} músicas no Firebase`, 'info');
-                } catch (e) {
-                    addDebugLog(`❌ Erro ao carregar stats: ${e.message}`, 'error');
-                }
-            };
-
-            const saveToFirebase = async () => {
-                if (!adminForm.title || !adminForm.artist || !adminForm.youtubeId) {
-                    showToast('❌ Preencha todos os campos!');
-                    return;
-                }
-
-                if (!isFirebaseActive || !db) {
-                    showToast('❌ Firebase não está conectado!');
-                    addDebugLog('❌ Tentativa de salvar sem Firebase ativo', 'error');
-                    return;
-                }
-
-                const cacheKey = generateCacheKey(adminForm.title, adminForm.artist);
-
-                try {
-                    addDebugLog(`💾 Salvando: ${adminForm.title} - ${adminForm.artist}`, 'info');
-
-                    // Busca capa e informações do iTunes
-                    const itunesData = await fetchAlbumArtwork(adminForm.title, adminForm.artist);
-
-                    await db.collection('song_cache').doc(cacheKey).set({
-                        title: adminForm.title,
-                        artist: adminForm.artist,
-                        youtubeId: adminForm.youtubeId,
-                        artwork: itunesData?.artwork || 'https://via.placeholder.com/600/000000/FFFFFF?text=MP3',
-                        albumName: itunesData?.albumName || 'Desconhecido',
-                        createdAt: new Date()
-                    });
-
-                    // Também salva no LocalStorage como backup
-                    localStorage.setItem(cacheKey, adminForm.youtubeId);
-
-                    showToast('✅ Música salva com sucesso!');
-                    addDebugLog(`✅ Salvo: ${cacheKey} -> ${adminForm.youtubeId}`, 'success');
-                    if (itunesData) addDebugLog(`🎨 Álbum: ${itunesData.albumName}`, 'success');
-
-                    setAdminForm({ title: '', artist: '', youtubeId: '' });
-                    loadFirebaseStats();
-                    loadMusicLibrary(); // Recarrega biblioteca
-                } catch (e) {
-                    showToast(`❌ Erro: ${e.message}`);
-                    addDebugLog(`❌ Erro ao salvar: ${e.message}`, 'error');
-                }
-            };
-
-            // Carrega estatísticas na inicialização
             useEffect(() => {
-                if (isFirebaseActive) {
-                    addDebugLog('🚀 Iniciando IronMusic...', 'info');
-                    addDebugLog(`🔥 Firebase: ${isFirebaseActive ? 'CONECTADO' : 'DESCONECTADO'}`, isFirebaseActive ? 'success' : 'error');
-                    loadFirebaseStats();
-                    loadMusicLibrary(); // Carrega biblioteca completa
-                }
+                loadMusicLibrary();
+
+                // Close context menu on click outside
+                const handleClick = () => setContextMenu(null);
+                document.addEventListener('click', handleClick);
+                return () => document.removeEventListener('click', handleClick);
             }, []);
 
-            // --- FUNÇÕES DO PLAYER AVANÇADO ---
-
-            // Carrega biblioteca completa do Firebase
             const loadMusicLibrary = async () => {
-                if (!isFirebaseActive || !db) return;
+                if (!db) return;
                 try {
-                    const snapshot = await db.collection('song_cache').orderBy('createdAt', 'desc').get();
+                    const snapshot = await db.collection('song_cache').orderBy('createdAt', 'desc').limit(50).get();
                     const songs = [];
                     snapshot.forEach(doc => {
-                        const data = doc.data();
-                        songs.push({
-                            id: doc.id,
-                            ...data,
-                            // Adiciona URL da artwork se não tiver
-                            artwork: data.artwork || 'https://via.placeholder.com/300/000000/FFFFFF?text=MP3'
-                        });
+                        songs.push({ id: doc.id, ...doc.data() });
                     });
                     setMusicLibrary(songs);
-                    addDebugLog(`📚 ${songs.length} músicas na biblioteca`, 'info');
                 } catch (e) {
-                    addDebugLog(`❌ Erro ao carregar biblioteca: ${e.message}`, 'error');
+                    console.error(e);
                 }
             };
 
-            // Deletar música do Firebase
-            const deleteSongFromFirebase = async (song) => {
-                if (!confirm(`Deletar "${song.title}" - ${song.artist}?`)) return;
-
-                try {
-                    addDebugLog(`🗑️ Deletando: ${song.title}`, 'warn');
-
-                    // Remove do Firebase
-                    await db.collection('song_cache').doc(song.id).delete();
-
-                    // Remove do LocalStorage
-                    localStorage.removeItem(song.id);
-
-                    showToast('🗑️ Música deletada!');
-                    addDebugLog(`✅ Deletado: ${song.id}`, 'success');
-
-                    // Recarrega biblioteca
-                    loadMusicLibrary();
-                    loadFirebaseStats();
-                } catch (e) {
-                    showToast(`❌ Erro ao deletar: ${e.message}`);
-                    addDebugLog(`❌ Erro: ${e.message}`, 'error');
-                }
+            const handlePlay = (track, index = 0) => {
+                setCurrentTrack(track);
+                setCurrentIndex(index);
+                setShowFullScreenPlayer(true);
+                setIsPlaying(true);
             };
 
-            // Busca capa iTunes
-            const fetchAlbumArtwork = async (title, artist) => {
+            const playNext = () => {
+                if (musicLibrary.length === 0) return;
+                const nextIndex = (currentIndex + 1) % musicLibrary.length;
+                handlePlay(musicLibrary[nextIndex], nextIndex);
+            };
+
+            const playPrevious = () => {
+                if (musicLibrary.length === 0) return;
+                const prevIndex = currentIndex === 0 ? musicLibrary.length - 1 : currentIndex - 1;
+                handlePlay(musicLibrary[prevIndex], prevIndex);
+            };
+
+            const toggleLike = async (e, track) => {
+                e.stopPropagation();
+                const newLiked = !track.liked;
+                if (db) {
+                    await db.collection('song_cache').doc(track.id).update({ liked: newLiked });
+                }
+                loadMusicLibrary();
+            };
+
+            const handleContextMenu = (e, track) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    track: track
+                });
+            };
+
+            const deleteTrack = async (track) => {
+                if (!confirm(`Excluir "${track.title}" de ${track.artist}?`)) return;
+
                 try {
-                    const q = encodeURIComponent(`${title} ${artist}`);
-                    const res = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
-                    const data = await res.json();
-                    if (data.results?.length > 0) {
-                        const track = data.results[0];
-                        return {
-                            artwork: track.artworkUrl100.replace('100x100', '600x600'),
-                            albumName: track.collectionName,
-                            artistName: track.artistName
-                        };
+                    if (db) {
+                        await db.collection('song_cache').doc(track.id).delete();
                     }
-                    return null;
+
+                    // If currently playing, stop it
+                    if (currentTrack?.id === track.id) {
+                        setCurrentTrack(null);
+                        setShowFullScreenPlayer(false);
+                        setIsPlaying(false);
+                    }
+
+                    loadMusicLibrary();
+                    setContextMenu(null);
                 } catch (e) {
-                    addDebugLog(`❌ iTunes: ${e.message}`, 'error');
-                    return null;
+                    console.error('Erro ao excluir:', e);
+                    alert('Erro ao excluir música');
                 }
             };
 
-            // Info da banda via Gemini
-            const fetchBandInfo = async (artist) => {
-                if (bandInfo?.artist === artist) {
-                    setShowBandInfo(true);
-                    return;
+            const searchMusic = async () => {
+                if (!searchQuery) return;
+                setLoading(true);
+                setSelectedAlbum(null);
+                try {
+                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=album&limit=20`);
+                    const data = await res.json();
+                    if (data.results) {
+                        setSearchResults(data.results.map(r => ({
+                            name: r.collectionName,
+                            artist: r.artistName,
+                            artwork: r.artworkUrl100.replace('100x100', '600x600'),
+                            collectionId: r.collectionId
+                        })));
+                    }
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    setLoading(false);
                 }
+            };
+
+            const fetchAlbumTracks = async (album) => {
+                setSelectedAlbum(album);
+                setLoadingTracks(true);
+                try {
+                    const res = await fetch(`https://itunes.apple.com/lookup?id=${album.collectionId}&entity=song`);
+                    const data = await res.json();
+                    if (data.results && data.results.length > 1) {
+                        const tracks = data.results.slice(1).map(track => ({
+                            name: track.trackName,
+                            artist: track.artistName,
+                            artwork: album.artwork,
+                            trackNumber: track.trackNumber
+                        }));
+                        setAlbumTracks(tracks);
+                    }
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    setLoadingTracks(false);
+                }
+            };
+
+            const selectTrack = async (track) => {
+                try {
+                    const searchQuery = `${track.artist} ${track.name} official audio`;
+                    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${YOUTUBE_API_KEY}&type=video&videoEmbeddable=true&maxResults=1`);
+                    const data = await res.json();
+
+                    if (data.items && data.items.length > 0) {
+                        const youtubeId = data.items[0].id.videoId;
+                        const newTrack = { ...track, youtubeId };
+
+                        if (db) {
+                            const cacheKey = `ironmusic_${track.name}_${track.artist}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                            await db.collection('song_cache').doc(cacheKey).set({
+                                title: track.name,
+                                artist: track.artist,
+                                youtubeId: youtubeId,
+                                artwork: track.artwork,
+                                createdAt: new Date()
+                            });
+                        }
+
+                        loadMusicLibrary();
+                        handlePlay(newTrack);
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            };
+
+            const fetchBandInfo = async (artist) => {
                 try {
                     setShowBandInfo(true);
-                    setBandInfo({ artist, loading: true });
-                    const prompt = `Informações sobre ${artist}: História, membros, estilo, principais álbuns. Máximo 200 palavras.`;
+                    setBandInfo({ loading: true });
+                    const prompt = `Informações sobre a banda ${artist}: História, membros atuais e passados, anos de formação, principais álbuns com anos de lançamento, curiosidades. Máximo 300 palavras em português.`;
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -632,432 +453,135 @@
                 }
             };
 
-            // Busca todos os álbuns da banda via iTunes
-            const fetchBandAlbums = async (artist) => {
-                if (!artist || artist.trim() === '') {
-                    showToast('❌ Digite o nome do artista!');
-                    return;
-                }
-
+            const fetchLyrics = async (track) => {
+                setLoadingLyrics(true);
                 try {
-                    setLoadingAlbums(true);
-                    setShowAlbumsModal(true);
-                    setBandAlbums([]);
-                    addDebugLog(`🎸 Buscando álbuns: ${artist}`, 'info');
-
-                    const q = encodeURIComponent(artist);
-                    const res = await fetch(`https://itunes.apple.com/search?term=${q}&entity=album&limit=50`);
+                    const prompt = `Forneça a letra completa da música "${track.title}" de "${track.artist}" em JSON com duas propriedades: "original" (letra original) e "traducao" (tradução em português). Se não souber a letra exata, forneça uma tradução aproximada baseada no tema da música.`;
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
                     const data = await res.json();
-
-                    if (data.results && data.results.length > 0) {
-                        // Remove duplicatas por nome do álbum
-                        const uniqueAlbums = [];
-                        const seen = new Set();
-
-                        data.results.forEach(album => {
-                            const key = `${album.collectionName}-${album.artistName}`;
-                            if (!seen.has(key)) {
-                                seen.add(key);
-                                uniqueAlbums.push({
-                                    name: album.collectionName,
-                                    artist: album.artistName,
-                                    artwork: album.artworkUrl100.replace('100x100', '600x600'),
-                                    releaseDate: new Date(album.releaseDate).getFullYear(),
-                                    trackCount: album.trackCount,
-                                    collectionId: album.collectionId
-                                });
-                            }
-                        });
-
-                        setBandAlbums(uniqueAlbums);
-                        addDebugLog(`✅ ${uniqueAlbums.length} álbuns encontrados`, 'success');
-                    } else {
-                        setBandAlbums([]);
-                        addDebugLog(`⚠️ Nenhum álbum encontrado`, 'warn');
-                    }
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+                    const jsonMatch = text.match(/\{[\s\S]*\}/);
+                    const lyricsData = jsonMatch ? JSON.parse(jsonMatch[0]) : { original: 'Não disponível', traducao: 'Não disponível' };
+                    setLyrics(lyricsData);
                 } catch (e) {
-                    addDebugLog(`❌ Erro ao buscar álbuns: ${e.message}`, 'error');
-                    showToast('❌ Erro ao buscar álbuns');
+                    setLyrics({ original: 'Erro ao carregar', traducao: 'Erro ao carregar' });
                 } finally {
-                    setLoadingAlbums(false);
+                    setLoadingLyrics(false);
                 }
             };
-
-            // Busca músicas de um álbum específico
-            const fetchAlbumTracks = async (album) => {
-                try {
-                    setLoadingTracks(true);
-                    setSelectedAlbum(album);
-                    setAlbumTracks([]);
-                    addDebugLog(`🎵 Buscando músicas: ${album.name}`, 'info');
-
-                    const res = await fetch(`https://itunes.apple.com/lookup?id=${album.collectionId}&entity=song`);
-                    const data = await res.json();
-
-                    if (data.results && data.results.length > 1) {
-                        // Primeiro resultado é o álbum, resto são músicas
-                        const tracks = data.results.slice(1).map(track => ({
-                            name: track.trackName,
-                            artist: track.artistName,
-                            trackNumber: track.trackNumber,
-                            duration: Math.floor(track.trackTimeMillis / 1000), // segundos
-                            previewUrl: track.previewUrl
-                        }));
-
-                        setAlbumTracks(tracks);
-                        addDebugLog(`✅ ${tracks.length} músicas encontradas`, 'success');
-                    } else {
-                        setAlbumTracks([]);
-                        addDebugLog(`⚠️ Nenhuma música encontrada`, 'warn');
-                    }
-                } catch (e) {
-                    addDebugLog(`❌ Erro ao buscar músicas: ${e.message}`, 'error');
-                    showToast('❌ Erro ao buscar músicas');
-                } finally {
-                    setLoadingTracks(false);
-                }
-            };
-
-            // Adiciona música selecionada - busca YouTube ID e salva automaticamente
-            const selectTrackFromAlbum = async (track) => {
-                try {
-                    // Fecha modal e mostra loading
-                    setShowAlbumsModal(false);
-                    setSelectedAlbum(null);
-                    setAlbumTracks([]);
-                    showToast(`🔍 Buscando "${track.name}" no YouTube...`);
-                    addDebugLog(`🔍 Buscando YouTube ID: ${track.name} - ${track.artist}`, 'info');
-
-                    // Busca YouTube ID via API (com filtros mais precisos)
-                    const searchQuery = `${track.artist} ${track.name} official audio`;
-                    const res = await fetch(
-                        `https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${YOUTUBE_API_KEY}&type=video&videoEmbeddable=true&videoCategoryId=10&maxResults=1`
-                    );
-
-                    if (!res.ok) {
-                        throw new Error(`YouTube API retornou erro ${res.status}`);
-                    }
-
-                    const data = await res.json();
-
-                    if (data.items && data.items.length > 0) {
-                        const youtubeId = data.items[0].id.videoId;
-                        addDebugLog(`✅ YouTube ID encontrado: ${youtubeId}`, 'success');
-
-                        // Busca artwork via iTunes (capa do álbum)
-                        const artwork = selectedAlbum?.artwork || 'https://via.placeholder.com/600/000000/FFFFFF?text=Album';
-
-                        // Gera chave única para o cache (mesmo padrão de fetchYoutubeId)
-                        const cacheKey = generateCacheKey(track.name, track.artist);
-
-                        // ✅ CORREÇÃO: Salva no FIRESTORE (não Realtime Database)
-                        if (isFirebaseActive && db) {
-                            await db.collection('song_cache').doc(cacheKey).set({
-                                title: track.name,
-                                artist: track.artist,
-                                youtubeId: youtubeId,
-                                artwork: artwork,
-                                albumName: selectedAlbum?.name || 'Desconhecido',
-                                createdAt: new Date()
-                            });
-
-                            addDebugLog(`💾 Salvo no Firebase: ${track.name}`, 'success');
-                        }
-
-                        // Também salva no LocalStorage como backup
-                        localStorage.setItem(cacheKey, youtubeId);
-
-                        showToast(`✅ "${track.name}" adicionada e pronta para tocar!`);
-
-                        // Cria objeto de música para tocar
-                        const newSong = {
-                            title: track.name,
-                            artist: track.artist,
-                            youtubeId: youtubeId,
-                            artwork: artwork,
-                            albumName: selectedAlbum?.name || ''
-                        };
-
-                        // Recarrega biblioteca
-                        loadMusicLibrary();
-
-                        // Toca a música automaticamente
-                        setTimeout(() => {
-                            handlePlay(newSong);
-                        }, 500);
-
-                    } else {
-                        addDebugLog(`❌ Nenhum vídeo encontrado no YouTube`, 'error');
-                        showToast(`❌ Não encontrei "${track.name}" no YouTube`);
-                    }
-
-                } catch (e) {
-                    addDebugLog(`❌ Erro ao buscar/salvar: ${e.message}`, 'error');
-                    showToast(`❌ Erro: ${e.message}`);
-                }
-            };
-
-            // Navegar para próxima música
-            const playNext = () => {
-                if (musicLibrary.length === 0) return;
-
-                const nextIndex = (currentIndex + 1) % musicLibrary.length;
-                setCurrentIndex(nextIndex);
-
-                const nextSong = musicLibrary[nextIndex];
-                handlePlay(nextSong);
-                addDebugLog(`⏭️ Próxima: ${nextSong.title}`, 'info');
-            };
-
-            // Navegar para música anterior
-            const playPrevious = () => {
-                if (musicLibrary.length === 0) return;
-
-                const prevIndex = currentIndex === 0 ? musicLibrary.length - 1 : currentIndex - 1;
-                setCurrentIndex(prevIndex);
-
-                const prevSong = musicLibrary[prevIndex];
-                handlePlay(prevSong);
-                addDebugLog(`⏮️ Anterior: ${prevSong.title}`, 'info');
-            };
-
-            // Controle de volume
-            const handleVolumeChange = (newVolume) => {
-                setVolume(newVolume);
-                if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                    try {
-                        youtubeRef.current.contentWindow.postMessage(
-                            JSON.stringify({ event: 'command', func: 'setVolume', args: [newVolume] }), '*'
-                        );
-                    } catch (e) { }
-                }
-                if (audioRef.current) {
-                    audioRef.current.volume = newVolume / 100;
-                }
-            };
-
-            // Toggle mute
-            const toggleMute = () => {
-                const newMuted = !isMuted;
-                setIsMuted(newMuted);
-
-                if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                    try {
-                        const func = newMuted ? 'mute' : 'unMute';
-                        youtubeRef.current.contentWindow.postMessage(
-                            JSON.stringify({ event: 'command', func }), '*'
-                        );
-                    } catch (e) { }
-                }
-            };
-
-
-
-            // --- LÓGICA DE PLAYER ---
-            useEffect(() => {
-                if (!currentTrack) return;
-
-                // Pause native audio sempre
-                audioRef.current.pause();
-
-                if (currentTrack.isLocal) {
-                    setSourceMode('local');
-                    audioRef.current.src = currentTrack.previewUrl;
-                    if (isPlaying) audioRef.current.play().catch(() => { });
-                    return;
-                }
-
-                // Se temos ID do YouTube, configura o modo
-                if (currentTrack.youtubeId) {
-                    setSourceMode('youtube');
-                    // Comanda o Iframe se já existir
-                    if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                        const cmd = isPlaying ? 'playVideo' : 'pauseVideo';
-                        try {
-                            youtubeRef.current.contentWindow.postMessage(
-                                JSON.stringify({ 'event': 'command', 'func': cmd }), '*'
-                            );
-                        } catch (e) { }
-                    }
-                }
-            }, [currentTrack, isPlaying]);
 
             const getYoutubeEmbed = () => {
-                if (!currentTrack || !currentTrack.youtubeId) return '';
-
-                const isSecureOrigin = window.location.protocol.startsWith('http');
-                let params = `autoplay=1&playsinline=1&rel=0&iv_load_policy=3`;
-
-                if (isSecureOrigin) {
-                    params += `&enablejsapi=1&origin=${window.location.origin}`;
-                }
-
-                if (currentTrack.youtubeId === 'SEARCH_FALLBACK') {
-                    const searchQuery = encodeURIComponent(`${currentTrack.title} ${currentTrack.artist}`);
-                    return `https://www.youtube.com/embed?listType=search&list=${searchQuery}&${params}`;
-                }
-
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId.trim()}?${params}`;
+                if (!currentTrack?.youtubeId) return '';
+                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1`;
             };
 
-            const fetchGemini = async (t) => {
-                if (!GEMINI_API_KEY) return;
-                setIsGeminiLoading(true); setGeminiData(null);
-                try {
-                    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: `JSON lyrics, translation, chords, tabs for "${t.title}" - "${t.artist}"` }] }] })
-                    });
-                    const d = await r.json();
-                    setGeminiData(JSON.parse(d.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim()));
-                } catch (e) { } finally { setIsGeminiLoading(false); }
+            const formatTime = (seconds) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
             };
 
-            useEffect(() => { if ((view === 'lyrics' || view === 'chords') && currentTrack && !geminiData) fetchGemini(currentTrack); }, [view, currentTrack]);
-
-            const handlePlay = async (t) => {
-                // Se for a mesma música, apenas abre o player
-                if (currentTrack?.title === t.title) {
-                    setShowFullScreenPlayer(true);
-                    return;
-                }
-
-                // Mostra o player imediatamente
-                setShowFullScreenPlayer(true);
-                setGeminiData(null);
-                setIsFetchingId(true);
-
-                // Configura música temporariamente SEM o ID
-                setCurrentTrack({ ...t, youtubeId: null });
-
-                // Busca o ID do YouTube (cache ou API) de forma assíncrona
-                const youtubeId = await fetchYoutubeId(t.title, t.artist);
-
-                // Atualiza com o ID encontrado (ou fallback se não encontrou)
-                setCurrentTrack(prev => ({
-                    ...prev,
-                    youtubeId: youtubeId || 'SEARCH_FALLBACK'
-                }));
-
-                setIsFetchingId(false);
-                setIsPlaying(true);
+            const themeColors = {
+                yellow: 'text-yellow-500',
+                purple: 'text-purple-500',
+                green: 'text-green-500'
             };
 
-            const handleFileUpload = (e) => {
-                const f = e.target.files[0]; if (!f) return;
-                handlePlay({ id: Date.now(), title: f.name.replace(/\.[^/.]+$/, ""), artist: "Local", artwork: "https://via.placeholder.com/300/000000/FFFFFF?text=MP3", previewUrl: URL.createObjectURL(f), isLocal: true });
-                showToast("Arquivo carregado!");
-            };
-
-            const searchMusic = async () => {
-                if (!query) return;
-                setLoading(true);
-
-                try {
-                    // Busca álbuns do artista
-                    addDebugLog(`🔍 Buscando álbuns: ${query}`, 'info');
-                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=album&limit=50`);
-                    const d = await res.json();
-
-                    if (d.results && d.results.length > 0) {
-                        // Remove duplicatas e formata como álbuns
-                        const uniqueAlbums = [];
-                        const seen = new Set();
-
-                        d.results.forEach(album => {
-                            const key = `${album.collectionName}-${album.artistName}`;
-                            if (!seen.has(key)) {
-                                seen.add(key);
-                                uniqueAlbums.push({
-                                    name: album.collectionName,
-                                    artist: album.artistName,
-                                    artwork: album.artworkUrl100.replace('100x100', '600x600'),
-                                    releaseDate: new Date(album.releaseDate).getFullYear(),
-                                    trackCount: album.trackCount,
-                                    collectionId: album.collectionId
-                                });
-                            }
-                        });
-
-                        setBandAlbums(uniqueAlbums);
-                        setSearchResults([]); // Limpa resultados antigos de músicas
-                        addDebugLog(`✅ ${uniqueAlbums.length} álbuns encontrados`, 'success');
-                        showToast(`✅ ${uniqueAlbums.length} álbuns encontrados!`);
-                    } else {
-                        setBandAlbums([]);
-                        setSearchResults([]);
-                        showToast('❌ Nenhum álbum encontrado');
-                    }
-                } catch (e) {
-                    addDebugLog(`❌ Erro na busca: ${e.message}`, 'error');
-                    showToast("❌ Erro na busca do iTunes.");
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const theme = activeTheme === 'purple' ? { spot: 'theme-purple-spot', text: 'text-purple-500' } : activeTheme === 'green' ? { spot: 'theme-green-spot', text: 'text-green-500' } : { spot: 'theme-yellow-spot', text: 'text-yellow-500' };
+            const groupedByArtist = musicLibrary.reduce((acc, song) => {
+                const artist = song.artist || 'Desconhecido';
+                if (!acc[artist]) acc[artist] = [];
+                acc[artist].push(song);
+                return acc;
+            }, {});
 
             return (
                 <div className="h-screen w-full flex flex-col relative">
-                    <div className={`gradient-spot ${theme.spot}`}></div>
-                    <div className={`toast ${toastMsg ? 'show' : ''}`}>{toastMsg}</div>
+                    <div className={`bg-wallpaper bg-${activeTheme}`}></div>
+                    <div className="bg-overlay"></div>
 
-                    <div className="flex justify-between items-center p-4 pt-8 z-20 relative">
-                        <h1 className="text-2xl font-bold tracking-tighter italic">IRON<span className={theme.text}>MUSIC</span></h1>
-                        <div className="flex gap-2 items-center">
-                            {['yellow', 'purple', 'green'].map(c => <button key={c} onClick={() => setActiveTheme(c)} className={`w-4 h-4 rounded-full bg-${c}-600 border ${activeTheme === c ? 'border-white' : 'border-transparent'}`}></button>)}
-                            <button onClick={() => setShowAdminModal(true)} className="ml-2 text-gray-400 hover:text-white transition" title="Painel Admin">
-                                <i className="fas fa-cog text-xl"></i>
-                            </button>
+                    <div className="flex justify-between items-center p-4 pt-8 z-10 relative">
+                        <div className="flex items-center gap-3">
+                            <i className="fas fa-guitar text-3xl text-yellow-500"></i>
+                            <h1 className="text-3xl rock-font tracking-wider">
+                                IRON<span className={themeColors[activeTheme]}>MUSIC</span>
+                            </h1>
+                        </div>
+                        <div className="flex gap-2">
+                            {['yellow', 'purple', 'green'].map(c => (
+                                <button
+                                    key={c}
+                                    onClick={() => setActiveTheme(c)}
+                                    className={`w-6 h-6 rounded-full bg-${c}-600 border-2 ${activeTheme === c ? 'border-white' : 'border-transparent'}`}
+                                />
+                            ))}
                         </div>
                     </div>
 
-                    <div className={`flex-1 overflow-y-auto pb-32 no-scrollbar p-4 z-10 ${showFullScreenPlayer ? 'hidden' : 'block'}`}>
+                    <div className="flex-1 overflow-y-auto pb-36 px-4 z-10 relative">
                         {view === 'home' && (
-                            <div className="space-y-4 animate-fade-in">
-                                <h2 className="text-2xl font-bold mb-4">📚 Minha Biblioteca</h2>
+                            <div className="space-y-6">
+                                <div className="flex gap-2 bg-white/5 p-1 rounded-lg">
+                                    <button onClick={() => setHomeTab('all')} className={`flex-1 py-2 rounded ${homeTab === 'all' ? 'bg-white/20' : ''}`}>Todas</button>
+                                    <button onClick={() => setHomeTab('artist')} className={`flex-1 py-2 rounded ${homeTab === 'artist' ? 'bg-white/20' : ''}`}>Por Banda</button>
+                                    <button onClick={() => setHomeTab('liked')} className={`flex-1 py-2 rounded ${homeTab === 'liked' ? 'bg-white/20' : ''}`}>Curtidas</button>
+                                </div>
 
-                                {musicLibrary.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                                        <i className="fas fa-music text-6xl text-gray-600"></i>
-                                        <p className="text-gray-400">Nenhuma música salva ainda</p>
-                                        <button onClick={() => setView('search')} className={`bg-white/10 px-6 py-3 rounded-full font-bold ${theme.text}`}>
-                                            Buscar Músicas
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="grid gap-3">
+                                {homeTab === 'all' && (
+                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                                         {musicLibrary.map((song, idx) => (
-                                            <div key={song.id} className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition group">
-                                                <img src={song.artwork} className="w-16 h-16 rounded object-cover shadow-lg" alt={song.title} />
-                                                <div className="flex-1 overflow-hidden">
-                                                    <p className="font-bold truncate text-white">{song.title}</p>
-                                                    <p className="text-xs text-gray-400 truncate">{song.artist}</p>
-                                                    <p className="text-[10px] text-gray-600 font-mono">{song.youtubeId}</p>
+                                            <div
+                                                key={song.id}
+                                                onClick={() => handlePlay(song, idx)}
+                                                onContextMenu={(e) => handleContextMenu(e, song)}
+                                                className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
+                                            >
+                                                <img src={song.artwork} className="w-full aspect-square vinyl-disc mb-2 object-cover" alt={song.title} />
+                                                <h4 className="font-bold text-sm truncate">{song.title}</h4>
+                                                <p className="text-xs text-gray-400 truncate">{song.artist}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {homeTab === 'artist' && (
+                                    <div className="space-y-8">
+                                        {Object.entries(groupedByArtist).map(([artist, songs]) => (
+                                            <div key={artist}>
+                                                <h3 className="text-xl font-bold mb-4">{artist}</h3>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                                    {songs.map((song, idx) => (
+                                                        <div
+                                                            key={song.id}
+                                                            onClick={() => handlePlay(song, idx)}
+                                                            onContextMenu={(e) => handleContextMenu(e, song)}
+                                                            className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
+                                                        >
+                                                            <img src={song.artwork} className="w-full aspect-square vinyl-disc mb-2 object-cover" alt={song.title} />
+                                                            <h4 className="font-bold text-sm truncate">{song.title}</h4>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
-                                                    <button
-                                                        onClick={() => {
-                                                            setCurrentIndex(idx);
-                                                            handlePlay(song);
-                                                        }}
-                                                        className="bg-white/10 hover:bg-white/20 p-2 rounded-full"
-                                                        title="Tocar"
-                                                    >
-                                                        <i className="fas fa-play text-sm"></i>
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            deleteSongFromFirebase(song);
-                                                        }}
-                                                        className="bg-red-500/20 hover:bg-red-500/30 p-2 rounded-full text-red-400"
-                                                        title="Deletar"
-                                                    >
-                                                        <i className="fas fa-trash text-sm"></i>
-                                                    </button>
-                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {homeTab === 'liked' && (
+                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                        {musicLibrary.filter(s => s.liked).map((song, idx) => (
+                                            <div
+                                                key={song.id}
+                                                onClick={() => handlePlay(song, idx)}
+                                                onContextMenu={(e) => handleContextMenu(e, song)}
+                                                className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
+                                            >
+                                                <img src={song.artwork} className="w-full aspect-square vinyl-disc mb-2 object-cover" alt={song.title} />
+                                                <h4 className="font-bold text-sm truncate">{song.title}</h4>
+                                                <p className="text-xs text-gray-400 truncate">{song.artist}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -1066,538 +590,238 @@
                         )}
 
                         {view === 'search' && (
-                            <div className="space-y-4 animate-fade-in">
+                            <div className="space-y-4">
                                 <div className="relative">
-                                    <input type="text" placeholder="Digite nome do artista (ex: Slipknot)..." className="w-full bg-white/10 border border-white/20 p-4 pl-10 rounded-full outline-none font-bold" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} />
-                                    <div className="absolute left-4 top-4 text-gray-400"><Icons.Search width={20} /></div>
-                                    <button onClick={searchMusic} className="absolute right-2 top-2 bg-white/10 p-2 rounded-full text-xs">Buscar</button>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar artista, álbum..."
+                                        value={searchQuery}
+                                        onChange={e => setSearchQuery(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && searchMusic()}
+                                        className="w-full bg-white/10 border border-white/20 p-4 pl-12 rounded-full outline-none"
+                                    />
+                                    <Icons.Search className="absolute left-4 top-4 text-gray-400" width={20} />
+                                    <button onClick={searchMusic} className="absolute right-2 top-2 bg-white/10 px-4 py-2 rounded-full">Buscar</button>
                                 </div>
 
-                                {loading && <div className="loader mx-auto"></div>}
+                                {loading && <div className="text-center py-8">Carregando...</div>}
 
-                                {/* MOSTRA MÚSICAS DO ÁLBUM se houver álbum selecionado */}
                                 {selectedAlbum ? (
                                     <div className="space-y-4">
-                                        {/* Header com volta */}
-                                        <div className="flex items-center gap-4 pb-4 border-b border-white/10">
-                                            <button
-                                                onClick={() => { setSelectedAlbum(null); setAlbumTracks([]); }}
-                                                className="text-white/60 hover:text-white text-2xl"
-                                            >
-                                                ← Voltar
-                                            </button>
-                                            <img src={selectedAlbum.artwork} className="w-16 h-16 rounded-lg shadow-lg" alt={selectedAlbum.name} />
+                                        <button onClick={() => setSelectedAlbum(null)} className="text-gray-400 hover:text-white">← Voltar</button>
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <img src={selectedAlbum.artwork} className="w-20 h-20 rounded-lg" alt={selectedAlbum.name} />
                                             <div>
                                                 <h2 className="text-xl font-bold">{selectedAlbum.name}</h2>
-                                                <p className="text-sm text-gray-400">{selectedAlbum.artist} • {selectedAlbum.releaseDate}</p>
+                                                <p className="text-gray-400">{selectedAlbum.artist}</p>
                                             </div>
                                         </div>
-
-                                        {loadingTracks ? (
-                                            <div className="text-center py-16">
-                                                <div className="animate-spin text-5xl mb-4">🎵</div>
-                                                <p className="text-gray-400">Carregando músicas...</p>
-                                            </div>
-                                        ) : albumTracks.length > 0 ? (
+                                        {loadingTracks && <div className="text-center py-8">Carregando músicas...</div>}
+                                        {!loadingTracks && (
                                             <div className="space-y-2">
                                                 {albumTracks.map((track, idx) => (
                                                     <div
                                                         key={idx}
-                                                        onClick={() => selectTrackFromAlbum(track)}
-                                                        className="flex items-center gap-4 bg-white/5 hover:bg-white/10 p-4 rounded-lg transition cursor-pointer border border-transparent hover:border-purple-500/30 group"
+                                                        onClick={() => selectTrack(track)}
+                                                        className="bg-white/5 hover:bg-white/10 p-3 rounded-lg cursor-pointer flex items-center gap-3"
                                                     >
-                                                        <div className="w-8 text-center text-gray-500 group-hover:text-purple-400 font-bold">
-                                                            {track.trackNumber}
-                                                        </div>
+                                                        <span className="text-gray-500 w-6">{track.trackNumber}</span>
                                                         <div className="flex-1">
-                                                            <h4 className="font-bold text-base group-hover:text-purple-300 transition">{track.name}</h4>
-                                                            <p className="text-sm text-gray-400">{track.artist}</p>
+                                                            <h4 className="font-bold">{track.name}</h4>
+                                                            <p className="text-xs text-gray-400">{track.artist}</p>
                                                         </div>
-                                                        <div className="text-sm text-gray-500">
-                                                            {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, '0')}
-                                                        </div>
-                                                        <div className="text-purple-400 opacity-0 group-hover:opacity-100 transition">
-                                                            ▶ Adicionar
-                                                        </div>
+                                                        <span className="text-xs text-gray-500">▶</span>
                                                     </div>
                                                 ))}
                                             </div>
-                                        ) : (
-                                            <p className="text-center text-gray-500">Nenhuma música encontrada</p>
                                         )}
                                     </div>
-                                ) : bandAlbums.length > 0 ? (
-                                    // MOSTRA GRID DE ÁLBUNS
-                                    <div className="space-y-4">
-                                        <h3 className="text-xl font-bold">🎸 Álbuns Encontrados</h3>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                            {bandAlbums.map((album, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    onClick={() => fetchAlbumTracks(album)}
-                                                    className="bg-white/5 rounded-xl p-4 hover:bg-white/10 transition cursor-pointer border border-transparent hover:border-purple-500/30 group hover:scale-105 transform"
-                                                >
-                                                    <div className="relative mb-3 overflow-hidden rounded-lg shadow-lg">
-                                                        <img
-                                                            src={album.artwork}
-                                                            alt={album.name}
-                                                            className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-300"
-                                                        />
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-end p-3">
-                                                            <span className="text-white font-bold text-sm">▶ Ver Músicas</span>
-                                                        </div>
-                                                    </div>
-                                                    <h4 className="font-bold text-sm line-clamp-2 mb-1 group-hover:text-purple-300 transition">{album.name}</h4>
-                                                    <p className="text-xs text-gray-500 mb-2">{album.artist}</p>
-                                                    <div className="flex justify-between text-xs text-gray-600">
-                                                        <span>{album.releaseDate}</span>
-                                                        <span className="text-purple-400/70">{album.trackCount} 🎵</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
                                 ) : (
-                                    // MENSAGEM INICIAL
-                                    !loading && query && (
-                                        <div className="text-center py-16">
-                                            <div className="text-6xl mb-4">🔍</div>
-                                            <p className="text-gray-400">Nenhum álbum encontrado</p>
-                                            <p className="text-gray-500 text-sm mt-2">Tente buscar outro artista</p>
-                                        </div>
-                                    )
-                                )}
-
-                                {!loading && !query && bandAlbums.length === 0 && (
-                                    <div className="text-center py-16">
-                                        <div className="text-6xl mb-4">🎸</div>
-                                        <p className="text-gray-400">Digite o nome de um artista</p>
-                                        <p className="text-gray-500 text-sm mt-2">Ex: Slipknot, Iron Maiden, Metallica</p>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                        {searchResults.map((result, i) => (
+                                            <div key={i} onClick={() => fetchAlbumTracks(result)} className="music-card bg-white/5 p-3 rounded-lg cursor-pointer">
+                                                <img src={result.artwork} className="w-full aspect-square rounded-lg mb-2" alt={result.name} />
+                                                <h4 className="font-bold text-sm truncate">{result.name}</h4>
+                                                <p className="text-xs text-gray-400 truncate">{result.artist}</p>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        {(view === 'chords' || view === 'lyrics') && (
-                            <div className="animate-fade-in pb-20">
-                                {currentTrack ? (
-                                    <div className="space-y-4">
-                                        <div className="flex gap-4 border-b border-white/10 pb-4"><img src={currentTrack.artwork} className="w-16 h-16 rounded shadow-lg" /><div><h2 className="text-xl font-bold">{currentTrack.title}</h2><p className="text-xs text-gray-500">{currentTrack.artist}</p></div></div>
-                                        {isGeminiLoading && <div className="loader mx-auto"></div>}
-                                        {!isGeminiLoading && geminiData && (
-                                            view === 'chords' ? <div className="bg-white/5 p-4 rounded-lg font-mono text-xs text-yellow-200 whitespace-pre-wrap">{geminiData.chords}<hr className="my-4 border-white/10" /><div className="text-green-300">{geminiData.tabs}</div></div> :
-                                                <div className="space-y-6"><div className="text-gray-200 whitespace-pre-line text-sm">{geminiData.original_lyrics}</div><div className="border-t border-white/10 pt-4 text-gray-400 whitespace-pre-line text-sm italic">{geminiData.translated_lyrics}</div></div>
-                                        )}
-                                        {!currentTrack && <p className="text-center text-gray-500">Selecione uma música</p>}
+                        {view === 'chords' && currentTrack && (
+                            <div className="space-y-4">
+                                <h2 className="text-2xl font-bold mb-4">Cifras e Tablaturas</h2>
+                                <div className="bg-white/5 p-4 rounded-lg">
+                                    <h3 className="font-bold mb-2">{currentTrack.title} - {currentTrack.artist}</h3>
+                                    <p className="text-sm text-gray-400 mb-4">Encontre cifras e tablaturas nos sites:</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <a href={`https://www.cifraclub.com.br/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-yellow-600 hover:bg-yellow-500 p-3 rounded-lg text-center font-bold">🎸 Cifra Club</a>
+                                        <a href={`https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-orange-600 hover:bg-orange-500 p-3 rounded-lg text-center font-bold">🎸 Ultimate Guitar</a>
+                                        <a href={`https://tabs.ultimate-guitar.com/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-red-600 hover:bg-red-500 p-3 rounded-lg text-center font-bold">🎸 UG Tabs</a>
+                                        <a href={`https://www.songsterr.com/?pattern=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 p-3 rounded-lg text-center font-bold">🎸 Songsterr</a>
                                     </div>
-                                ) : <p className="text-center text-gray-500 py-20">Selecione uma música na busca</p>}
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'lyrics' && currentTrack && (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
+                                    {!lyrics && <button onClick={() => fetchLyrics(currentTrack)} className="bg-white/10 px-4 py-2 rounded-lg">Carregar Letra</button>}
+                                </div>
+                                {loadingLyrics && <div className="text-center py-8">Carregando letra...</div>}
+                                {lyrics && (
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        <div className="bg-white/5 p-4 rounded-lg">
+                                            <h3 className="font-bold mb-3 text-yellow-500">Original</h3>
+                                            <pre className="whitespace-pre-wrap text-sm">{lyrics.original}</pre>
+                                        </div>
+                                        <div className="bg-white/5 p-4 rounded-lg">
+                                            <h3 className="font-bold mb-3 text-green-500">Tradução</h3>
+                                            <pre className="whitespace-pre-wrap text-sm">{lyrics.traducao}</pre>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
 
                     {showFullScreenPlayer && currentTrack && (
-                        <div className="absolute inset-0 z-50 bg-black flex flex-col animate-fade-in">
-                            <div className="flex justify-between items-center p-6 bg-black">
+                        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col">
+                            <div className="p-6 flex justify-between">
                                 <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
-                                <span className="text-xs tracking-widest text-gray-400">TOCANDO AGORA</span>
-                                <button><i className="fas fa-ellipsis-v text-xl"></i></button>
+                                <button onClick={() => fetchBandInfo(currentTrack.artist)} className="bg-white/10 px-4 py-2 rounded-lg">ℹ️ Sobre</button>
                             </div>
-
-                            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
-                                {/* YouTube INVISÍVEL - apenas áudio */}
-                                {sourceMode === 'youtube' && currentTrack.youtubeId && (
-                                    <iframe
-                                        ref={youtubeRef}
-                                        className="absolute top-[-9999px] left-[-9999px] w-1 h-1 opacity-0 pointer-events-none"
-                                        src={getYoutubeEmbed()}
-                                        title="YouTube Audio"
-                                        frameBorder="0"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    />
-                                )}
-
-                                {/* CAPA DO ÁLBUM - Visual Principal */}
-                                <div className="relative w-80 h-80 md:w-96 md:h-96 flex items-center justify-center">
-                                    <img
-                                        src={currentTrack.artwork}
-                                        className={`w-full h-full rounded-2xl object-cover shadow-2xl border-4 border-white/10 ${isPlaying ? 'album-cover-animated album-cover-glow' : ''
-                                            }`}
-                                        alt={currentTrack.title}
-                                    />
-
-                                    {/* Overlay de brilho quando tocando */}
-                                    {isPlaying && (
-                                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-transparent via-white/10 to-transparent pointer-events-none"></div>
-                                    )}
-                                </div>
-
-                                {/* Link para YouTube */}
-                                {sourceMode === 'youtube' && currentTrack.youtubeId !== 'SEARCH_FALLBACK' && (
-                                    <div className="mt-6 flex flex-col items-center gap-2">
-                                        <a
-                                            href={`https://www.youtube.com/watch?v=${currentTrack.youtubeId}`}
-                                            target="_blank"
-                                            className="text-xs border border-white/20 px-3 py-1 rounded-full text-white/50 hover:bg-white/10 flex items-center gap-2"
-                                        >
-                                            <i className="fab fa-youtube"></i> Abrir no YouTube
-                                        </a>
-                                    </div>
-                                )}
+                            <div className="flex-1 flex items-center justify-center">
+                                <img src={currentTrack.artwork} className={`w-80 h-80 vinyl-disc shadow-2xl ${isPlaying ? 'spin-slow' : ''}`} alt={currentTrack.title} />
                             </div>
+                            <div className="p-8 space-y-4">
+                                <div>
+                                    <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
+                                    <p className={`text-lg ${themeColors[activeTheme]}`}>{currentTrack.artist}</p>
+                                </div>
 
-                            <div className="p-8 pb-12 space-y-6 bg-black">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                        <h2 className="text-2xl font-bold text-white mb-1">{currentTrack.title}</h2>
-                                        <p className={`text-lg ${theme.text}`}>{currentTrack.artist}</p>
-                                        {currentTrack.albumName && (
-                                            <p className="text-sm text-gray-400 mt-1">💿 {currentTrack.albumName}</p>
-                                        )}
+                                {/* Progress Bar */}
+                                <div className="space-y-2">
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max={duration || 100}
+                                        value={currentTime}
+                                        onChange={(e) => setCurrentTime(Number(e.target.value))}
+                                        className="w-full"
+                                        style={{
+                                            background: `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.2) ${(currentTime / duration) * 100}%)`
+                                        }}
+                                    />
+                                    <div className="flex justify-between text-xs text-gray-400">
+                                        <span>{formatTime(currentTime)}</span>
+                                        <span>{formatTime(duration)}</span>
                                     </div>
-                                    <button
-                                        onClick={() => fetchBandInfo(currentTrack.artist)}
-                                        className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-sm flex items-center gap-2 transition"
-                                        title="Sobre a Banda"
-                                    >
-                                        <i className="fas fa-info-circle"></i>
-                                        <span className="hidden sm:inline">Sobre</span>
-                                    </button>
-                                </div>
-                                <div className="flex justify-between">
-                                    <button><Icons.Heart width={28} className="text-gray-400" /></button>
                                 </div>
 
-                                {/* Controles de Reprodução */}
-                                <div className="flex justify-between items-center px-4 mt-6">
-                                    <button onClick={playPrevious} className="text-white/70 hover:text-white transition" disabled={musicLibrary.length === 0}>
+                                {/* Controls */}
+                                <div className="flex justify-center gap-6 items-center">
+                                    <button onClick={playPrevious} className="text-white/70 hover:text-white">
                                         <Icons.SkipBack width={32} />
                                     </button>
-                                    <button onClick={() => setIsPlaying(!isPlaying)} className={`w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition shadow-[0_0_20px_rgba(255,255,255,0.3)]`}>
+                                    <button onClick={() => setIsPlaying(!isPlaying)} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center">
                                         {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} />}
                                     </button>
-                                    <button onClick={playNext} className="text-white/70 hover:text-white transition" disabled={musicLibrary.length === 0}>
+                                    <button onClick={playNext} className="text-white/70 hover:text-white">
                                         <Icons.Skip width={32} />
                                     </button>
                                 </div>
 
-                                {/* Controle de Volume */}
-                                <div className="flex items-center gap-3 px-8 mt-4">
-                                    <button onClick={toggleMute} className="text-white/70 hover:text-white">
-                                        <i className={`fas ${isMuted ? 'fa-volume-mute' : volume > 50 ? 'fa-volume-up' : 'fa-volume-down'} text-xl`}></i>
-                                    </button>
+                                {/* Volume */}
+                                <div className="flex items-center gap-3">
+                                    <Icons.Volume width={20} />
                                     <input
                                         type="range"
                                         min="0"
                                         max="100"
                                         value={volume}
-                                        onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
-                                        className="flex-1 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                                        onChange={(e) => setVolume(Number(e.target.value))}
+                                        className="flex-1"
                                         style={{
                                             background: `linear-gradient(to right, white ${volume}%, rgba(255,255,255,0.2) ${volume}%)`
                                         }}
                                     />
-                                    <span className="text-xs text-white/50 w-8 text-right">{volume}%</span>
+                                    <span className="text-xs w-8">{volume}%</span>
                                 </div>
                             </div>
+                            {currentTrack.youtubeId && (
+                                <iframe ref={youtubeRef} className="hidden" src={getYoutubeEmbed()} allow="autoplay" />
+                            )}
                         </div>
                     )}
 
-                    {!showFullScreenPlayer && (
-                        <div className="fixed bottom-0 w-full bg-black/90 backdrop-blur-xl border-t border-white/10 pb-safe pt-2 px-2 z-40">
-                            {currentTrack && <div className="flex justify-between px-4 pb-3 border-b border-white/5 mb-2 cursor-pointer" onClick={() => setShowFullScreenPlayer(true)}>
-                                <div className="flex gap-3"><img src={currentTrack.artwork} className="w-10 h-10 rounded" /><div><p className={`text-sm font-bold truncate w-40 ${theme.text}`}>{currentTrack.title}</p><p className="text-xs text-gray-500">{currentTrack.artist}</p></div></div>
-                                <div className="flex gap-4 items-center"><button onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying) }}>{isPlaying ? <Icons.Pause width={16} /> : <Icons.Play width={16} />}</button></div>
-                            </div>}
-                            <div className="flex justify-around pb-2">
-                                <NavButton icon={Icons.Home} label="Início" active={view === 'home'} onClick={() => setView('home')} color={theme.text} />
-                                <NavButton icon={Icons.Search} label="Buscar" active={view === 'search'} onClick={() => setView('search')} color={theme.text} />
-                                <button onClick={() => setView('chords')} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${view === 'chords' ? 'scale-110' : 'opacity-50'}`}><div className={view === 'chords' ? theme.text : 'text-white'}><i className="fas fa-guitar text-xl"></i></div><span className="text-[10px] font-bold">Cifra</span></button>
-                                <NavButton icon={Icons.ABC} label="Letra" active={view === 'lyrics'} onClick={() => setView('lyrics')} color={theme.text} />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* PAINEL ADMIN MODAL */}
-                    {showAdminModal && (
-                        <div className="admin-modal">
-                            <div className="bg-gray-900 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto border border-white/20">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-bold">🔧 Painel Admin</h2>
-                                    <button onClick={() => setShowAdminModal(false)} className="text-gray-400 hover:text-white">
-                                        <i className="fas fa-times text-xl"></i>
-                                    </button>
-                                </div>
-
-                                {/* Status Firebase */}
-                                <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
-                                    <h3 className="text-sm font-bold mb-2">📊 Status do Firebase</h3>
-                                    <div className="flex items-center gap-2 text-sm">
-                                        <span className={isFirebaseActive ? 'text-green-400' : 'text-red-400'}>
-                                            {isFirebaseActive ? '🟢 Conectado' : '🔴 Desconectado'}
-                                        </span>
-                                        <span className="text-gray-400">|</span>
-                                        <span className="text-gray-300">⚡ {firebaseStats.total} músicas</span>
-                                        <button onClick={loadFirebaseStats} className="ml-auto text-xs bg-white/10 px-2 py-1 rounded hover:bg-white/20">
-                                            🔄 Atualizar
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Formulário */}
-                                <div className="mb-6">
-                                    <h3 className="text-sm font-bold mb-3">➕ Adicionar Música</h3>
-                                    <div className="space-y-3">
-                                        <input
-                                            type="text"
-                                            placeholder="Título (ex: Snuff)"
-                                            value={adminForm.title}
-                                            onChange={e => setAdminForm({ ...adminForm, title: e.target.value })}
-                                            className="w-full bg-white/10 border border-white/20 p-3 rounded-lg outline-none focus:border-white/40 text-sm"
-                                        />
-                                        <input
-                                            type="text"
-                                            placeholder="Artista (ex: Slipknot)"
-                                            value={adminForm.artist}
-                                            onChange={e => setAdminForm({ ...adminForm, artist: e.target.value })}
-                                            className="w-full bg-white/10 border border-white/20 p-3 rounded-lg outline-none focus:border-white/40 text-sm"
-                                        />
-                                        <button
-                                            onClick={() => fetchBandAlbums(adminForm.artist)}
-                                            className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 p-2 rounded-lg font-bold text-white transition text-sm"
-                                        >
-                                            🎸 Ver Todos os CDs desta Banda
-                                        </button>
-                                        <input
-                                            type="text"
-                                            placeholder="YouTube ID (ex: LXEKuttVRIo)"
-                                            value={adminForm.youtubeId}
-                                            onChange={e => setAdminForm({ ...adminForm, youtubeId: e.target.value })}
-                                            className="w-full bg-white/10 border border-white/20 p-3 rounded-lg outline-none focus:border-white/40 text-sm font-mono"
-                                        />
-                                        <div className="text-xs text-gray-400 bg-white/5 p-2 rounded">
-                                            💡 <strong>Dica:</strong> YouTube ID está na URL após "v=". Ex: youtube.com/watch?v=<span className="text-yellow-400">LXEKuttVRIo</span>
-                                        </div>
-                                        <button
-                                            onClick={saveToFirebase}
-                                            className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 p-3 rounded-lg font-bold text-black transition"
-                                        >
-                                            💾 Salvar no Firebase
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Lista de músicas salvas */}
-                                {firebaseStats.songs.length > 0 && (
-                                    <div>
-                                        <h3 className="text-sm font-bold mb-2">📋 Músicas no Firebase ({firebaseStats.total})</h3>
-                                        <div className="space-y-1 max-h-48 overflow-y-auto bg-white/5 rounded-lg p-2 text-xs">
-                                            {firebaseStats.songs.map((song, idx) => (
-                                                <div key={idx} className="flex justify-between items-center py-1 px-2 hover:bg-white/10 rounded">
-                                                    <span className="truncate flex-1">
-                                                        <span className="text-white font-bold">{song.title}</span>
-                                                        <span className="text-gray-400"> - {song.artist}</span>
-                                                    </span>
-                                                    <span className="text-gray-500 font-mono text-[10px] ml-2">{song.youtubeId}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL INFO DA BANDA */}
                     {showBandInfo && bandInfo && (
-                        <div className="admin-modal">
-                            <div className="modal-content max-w-2xl">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                                        <i className="fas fa-info-circle"></i>
-                                        Sobre {bandInfo.artist}
-                                    </h2>
-                                    <button
-                                        onClick={() => setShowBandInfo(false)}
-                                        className="text-gray-400 hover:text-white text-2xl"
-                                    >
-                                        ×
-                                    </button>
-                                </div>
-
-                                {bandInfo.loading ? (
-                                    <div className="text-center py-12">
-                                        <div className="animate-spin text-4xl mb-4">⏳</div>
-                                        <p className="text-gray-400">Carregando informações...</p>
-                                    </div>
-                                ) : (
-                                    <div className="prose prose-invert prose-sm max-w-none">
-                                        <div className="text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                            {bandInfo.content}
-                                        </div>
-                                    </div>
-                                )}
+                        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setShowBandInfo(false)}>
+                            <div className="bg-gray-900 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                <h2 className="text-2xl font-bold mb-4">ℹ️ Sobre {bandInfo.artist}</h2>
+                                {bandInfo.loading ? <p>Carregando...</p> : <p className="whitespace-pre-wrap">{bandInfo.content}</p>}
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL - ÁLBUNS E MÚSICAS DA BANDA */}
-                    {showAlbumsModal && (
-                        <div className="fixed inset-0 bg-black/95 z-200 flex items-center justify-center p-4 animate-fadeIn" onClick={() => { if (!selectedAlbum) setShowAlbumsModal(false); }}>
-                            <div className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl max-w-6xl w-full max-h-[85vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-                                {/* Header */}
-                                <div className="flex justify-between items-center p-6 border-b border-white/10 bg-gradient-to-r from-purple-900/20 to-transparent">
+                    <div className="fixed bottom-4 left-4 right-4 z-40">
+                        {currentTrack && !showFullScreenPlayer && (
+                            <div onClick={() => setShowFullScreenPlayer(true)} className="mb-2 glass-nav rounded-lg p-2 flex items-center justify-between cursor-pointer">
+                                <div className="flex items-center gap-3">
+                                    <img src={currentTrack.artwork} className={`w-10 h-10 vinyl-disc ${isPlaying ? 'spin-slow' : ''}`} alt={currentTrack.title} />
                                     <div>
-                                        {selectedAlbum ? (
-                                            <div className="flex items-center gap-4">
-                                                <button
-                                                    onClick={() => { setSelectedAlbum(null); setAlbumTracks([]); }}
-                                                    className="text-white/60 hover:text-white text-2xl"
-                                                >
-                                                    ←
-                                                </button>
-                                                <div className="flex items-center gap-3">
-                                                    <img src={selectedAlbum.artwork} className="w-16 h-16 rounded-lg" alt={selectedAlbum.name} />
-                                                    <div>
-                                                        <h2 className="text-xl font-bold">{selectedAlbum.name}</h2>
-                                                        <p className="text-sm text-gray-400">{selectedAlbum.artist} • {selectedAlbum.releaseDate}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <h2 className="text-2xl font-bold flex items-center gap-2">
-                                                🎸 Álbuns Disponíveis
-                                            </h2>
-                                        )}
+                                        <p className="text-sm font-bold truncate">{currentTrack.title}</p>
+                                        <p className="text-xs text-green-400 truncate">{currentTrack.artist}</p>
                                     </div>
-                                    <button
-                                        onClick={() => { setShowAlbumsModal(false); setSelectedAlbum(null); setAlbumTracks([]); }}
-                                        className="text-white/60 hover:text-white text-3xl leading-none hover:rotate-90 transition-transform"
-                                    >
-                                        ×
-                                    </button>
                                 </div>
-
-                                {/* Conteúdo */}
-                                <div className="p-6 overflow-y-auto max-h-[calc(85vh-100px)]">
-                                    {selectedAlbum ? (
-                                        // MOSTRA MÚSICAS DO ÁLBUM
-                                        loadingTracks ? (
-                                            <div className="text-center py-16">
-                                                <div className="animate-spin text-5xl mb-4">🎵</div>
-                                                <p className="text-gray-400 text-lg">Carregando músicas...</p>
-                                            </div>
-                                        ) : albumTracks.length > 0 ? (
-                                            <div className="space-y-2">
-                                                {albumTracks.map((track, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => selectTrackFromAlbum(track)}
-                                                        className="flex items-center gap-4 bg-white/5 hover:bg-white/10 p-4 rounded-lg transition cursor-pointer border border-transparent hover:border-purple-500/30 group"
-                                                    >
-                                                        <div className="w-8 text-center text-gray-500 group-hover:text-purple-400 font-bold">
-                                                            {track.trackNumber}
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <h4 className="font-bold text-base group-hover:text-purple-300 transition">{track.name}</h4>
-                                                            <p className="text-sm text-gray-400">{track.artist}</p>
-                                                        </div>
-                                                        <div className="text-sm text-gray-500">
-                                                            {Math.floor(track.duration / 60)}:{String(track.duration % 60).padStart(2, '0')}
-                                                        </div>
-                                                        <div className="text-purple-400 opacity-0 group-hover:opacity-100 transition">
-                                                            ✓ Selecionar
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-16">
-                                                <p className="text-gray-400 text-lg">Nenhuma música encontrada</p>
-                                            </div>
-                                        )
-                                    ) : (
-                                        // MOSTRA GRID DE ÁLBUMS
-                                        loadingAlbums ? (
-                                            <div className="text-center py-16">
-                                                <div className="animate-spin text-5xl mb-4">⏳</div>
-                                                <p className="text-gray-400 text-lg">Buscando álbuns...</p>
-                                            </div>
-                                        ) : bandAlbums.length > 0 ? (
-                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
-                                                {bandAlbums.map((album, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => fetchAlbumTracks(album)}
-                                                        className="bg-white/5 rounded-xl p-4 hover:bg-white/10 transition cursor-pointer border border-transparent hover:border-purple-500/30 group hover:scale-105 transform"
-                                                    >
-                                                        <div className="relative mb-3 overflow-hidden rounded-lg shadow-lg">
-                                                            <img
-                                                                src={album.artwork}
-                                                                alt={album.name}
-                                                                className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-300"
-                                                            />
-                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition flex items-end p-3">
-                                                                <span className="text-white font-bold text-sm">▶ Ver Músicas</span>
-                                                            </div>
-                                                        </div>
-                                                        <h4 className="font-bold text-sm line-clamp-2 mb-1 group-hover:text-purple-300 transition">{album.name}</h4>
-                                                        <p className="text-xs text-gray-500 mb-2">{album.artist}</p>
-                                                        <div className="flex justify-between text-xs text-gray-600">
-                                                            <span>{album.releaseDate}</span>
-                                                            <span className="text-purple-400/70">{album.trackCount} 🎵</span>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-16">
-                                                <div className="text-6xl mb-4">🔍</div>
-                                                <p className="text-gray-400 text-lg">Nenhum álbum encontrado</p>
-                                                <p className="text-gray-500 text-sm mt-2">Tente buscar outro artista</p>
-                                            </div>
-                                        )
-                                    )}
-                                </div>
+                                <button onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}>
+                                    {isPlaying ? <Icons.Pause width={20} /> : <Icons.Play width={20} />}
+                                </button>
                             </div>
+                        )}
+
+                        <div className="glass-nav rounded-2xl h-16 flex items-center justify-around px-2">
+                            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 w-16 ${view === 'home' ? 'text-white' : 'text-gray-500'}`}>
+                                <Icons.Home width={24} />
+                                <span className="text-[10px]">Início</span>
+                            </button>
+                            <button onClick={() => setView('search')} className={`flex flex-col items-center gap-1 w-16 ${view === 'search' ? 'text-white' : 'text-gray-500'}`}>
+                                <Icons.Search width={24} />
+                                <span className="text-[10px]">Buscar</span>
+                            </button>
+                            <button onClick={() => setView('chords')} className={`flex flex-col items-center gap-1 w-16 ${view === 'chords' ? 'text-white' : 'text-gray-500'}`}>
+                                <Icons.Guitar width={24} />
+                                <span className="text-[10px]">Cifra</span>
+                            </button>
+                            <button onClick={() => setView('lyrics')} className={`flex flex-col items-center gap-1 w-16 ${view === 'lyrics' ? 'text-white' : 'text-gray-500'}`}>
+                                <Icons.ABC width={24} />
+                                <span className="text-[10px]">Letra</span>
+                            </button>
                         </div>
-                    )}
+                    </div>
 
-
-                    {showDebugConsole && debugLogs.length > 0 && (
-                        <div className="debug-console">
-                            <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/20">
-                                <span className="text-white font-bold text-xs">🐛 Debug</span>
-                                <button onClick={() => setShowDebugConsole(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
-                            </div>
-                            <div className="space-y-1">
-                                {debugLogs.map((log, idx) => (
-                                    <div key={idx} className={`text-[9px] ${log.type === 'success' ? 'text-green-400' :
-                                        log.type === 'error' ? 'text-red-400' :
-                                            log.type === 'warn' ? 'text-yellow-400' :
-                                                'text-gray-300'
-                                        }`}>
-                                        {log.msg}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {!showDebugConsole && (
-                        <button
-                            onClick={() => setShowDebugConsole(true)}
-                            className="fixed bottom-24 right-4 bg-white/10 hover:bg-white/20 p-2 rounded-full text-xs z-150 border border-white/20"
-                            title="Mostrar Debug Console"
+                    {/* Context Menu */}
+                    {contextMenu && (
+                        <div
+                            className="context-menu"
+                            style={{ top: contextMenu.y, left: contextMenu.x }}
+                            onClick={(e) => e.stopPropagation()}
                         >
-                            🐛
-                        </button>
+                            <div className="context-menu-item" onClick={() => handlePlay(contextMenu.track)}>
+                                ▶️ Tocar
+                            </div>
+                            <div className="context-menu-item danger" onClick={() => deleteTrack(contextMenu.track)}>
+                                🗑️ Excluir
+                            </div>
+                        </div>
                     )}
                 </div>
             );
         }
-
-        const NavButton = ({ icon: Icon, label, active, onClick, color }) => (
-            <button onClick={onClick} className={`flex flex-col items-center gap-1 p-2 w-16 transition-all duration-300 ${active ? 'scale-110' : 'opacity-50'}`}><div className={active ? color : 'text-white'}><Icon width={24} height={24} /></div><span className="text-[10px] font-bold">{label}</span></button>
-        );
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
