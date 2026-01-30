@@ -294,6 +294,32 @@
         .context-menu-item.danger:hover {
             background: rgba(239, 68, 68, 0.2);
         }
+
+        /* Debug Console */
+        .debug-console {
+            position: fixed;
+            bottom: 80px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 10px;
+            max-width: 300px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 10px;
+            font-family: monospace;
+            z-index: 150;
+        }
+
+        .debug-console::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .debug-console::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }
     </style>
 </head>
 
@@ -357,6 +383,10 @@
             const [albumTracks, setAlbumTracks] = useState([]);
             const [loading, setLoading] = useState(false);
             const [loadingTracks, setLoadingTracks] = useState(false);
+
+            // Debug Console
+            const [showDebugConsole, setShowDebugConsole] = useState(true);
+            const [debugLogs, setDebugLogs] = useState([]);
             const [bandInfo, setBandInfo] = useState(null);
             const [showBandInfo, setShowBandInfo] = useState(false);
             const [lyrics, setLyrics] = useState(null);
@@ -364,6 +394,15 @@
             const [contextMenu, setContextMenu] = useState(null);
 
             const youtubeRef = useRef(null);
+            const playerRef = useRef(null);
+
+            // Função de Debug
+            const addDebugLog = (msg, type = 'info') => {
+                const timestamp = new Date().toLocaleTimeString('pt-BR');
+                const logEntry = `[${timestamp}] ${msg}`;
+                console.log(logEntry);
+                setDebugLogs(prev => [...prev.slice(-20), { msg: logEntry, type }]); // Mantém últimas 20 entradas
+            };
             const progressInterval = useRef(null);
 
             useEffect(() => {
@@ -611,6 +650,7 @@
             const selectTrackFromSearch = async (track) => {
                 setLoadingTracks(true);
                 try {
+                    addDebugLog(`🎵 Selecionando: ${track.title} - ${track.artist}`, 'info');
                     console.log('🎵 Selecionando música:', track);
 
                     // Fecha modal e mostra loading
@@ -630,10 +670,12 @@
 
                     const data = await res.json();
                     console.log('📺 Resposta YouTube API:', data);
+                    addDebugLog(`📺 YouTube API: ${data.items?.length || 0} resultados`, 'info');
 
                     if (data.items && data.items.length > 0) {
                         const youtubeId = data.items[0].id.videoId;
                         console.log('✅ YouTube ID encontrado:', youtubeId);
+                        addDebugLog(`✅ YouTube ID: ${youtubeId}`, 'success');
 
                         // Cria objeto completo de música
                         const newSong = {
@@ -653,8 +695,10 @@
                                 const docRef = await db.collection('song_cache').add(newSong);
                                 newSong.id = docRef.id;
                                 console.log('💾 Salvo no Firebase com ID:', docRef.id);
+                                addDebugLog(`💾 Salvo Firebase: ${track.title} -> ID: ${docRef.id}`, 'success');
                             } catch (e) {
                                 console.error('❌ Erro ao salvar no Firebase:', e);
+                                addDebugLog(`❌ Erro Firebase: ${e.message}`, 'error');
                             }
                         }
 
@@ -1002,6 +1046,82 @@
                                             <a href={`https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-orange-600 hover:bg-orange-500 p-3 rounded-lg text-center font-bold">🎸 Ultimate Guitar</a>
                                             <a href={`https://tabs.ultimate-guitar.com/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-red-600 hover:bg-red-500 p-3 rounded-lg text-center font-bold">🎸 UG Tabs</a>
                                             <a href={`https://www.songsterr.com/?pattern=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 p-3 rounded-lg text-center font-bold">🎸 Songsterr</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {view === 'chords' && currentTrack && (
+                                <div className="space-y-4">
+                                    <h2 className="text-2xl font-bold mb-4">🎸 Cifras & Tablaturas</h2>
+                                    <div className="bg-white/5 p-4 rounded-lg">
+                                        <p className="text-sm text-gray-400 mb-4">
+                                            Clique em um dos sites abaixo para ver cifras/tablaturas:
+                                        </p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <a
+                                                href={`https://www.cifraclub.com.br/${currentTrack.artist.toLowerCase().replace(/\s+/g, '-')}/${currentTrack.title.toLowerCase().replace(/\s+/g, '-')}/`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 bg-yellow-600 hover:bg-yellow-500 p-4 rounded-lg transition group"
+                                            >
+                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
+                                                    <i className="fas fa-guitar text-yellow-600 text-xl"></i>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="font-bold text-white">Cifra Club</p>
+                                                    <p className="text-xs text-yellow-100">Maior site brasileiro</p>
+                                                </div>
+                                                <i className="fas fa-external-link-alt text-white/70 group-hover:text-white"></i>
+                                            </a>
+
+                                            <a
+                                                href={`https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 bg-orange-600 hover:bg-orange-500 p-4 rounded-lg transition group"
+                                            >
+                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
+                                                    <i className="fas fa-guitar text-orange-600 text-xl"></i>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="font-bold text-white">Ultimate Guitar</p>
+                                                    <p className="text-xs text-orange-100">Maior comunidade mundial</p>
+                                                </div>
+                                                <i className="fas fa-external-link-alt text-white/70 group-hover:text-white"></i>
+                                            </a>
+
+                                            <a
+                                                href={`https://tabs.ultimate-guitar.com/tab/${currentTrack.artist.toLowerCase().replace(/\s+/g, '-')}/${currentTrack.title.toLowerCase().replace(/\s+/g, '-')}-tabs-1`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 bg-red-600 hover:bg-red-500 p-4 rounded-lg transition group"
+                                            >
+                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
+                                                    <i className="fas fa-music text-red-600 text-xl"></i>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="font-bold text-white">UG Tabs</p>
+                                                    <p className="text-xs text-red-100">Tablaturas completas</p>
+                                                </div>
+                                                <i className="fas fa-external-link-alt text-white/70 group-hover:text-white"></i>
+                                            </a>
+
+                                            <a
+                                                href={`https://www.songsterr.com/a/wa/search?pattern=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 bg-purple-600 hover:bg-purple-500 p-4 rounded-lg transition group"
+                                            >
+                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
+                                                    <i className="fas fa-play text-purple-600 text-xl"></i>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="font-bold text-white">Songsterr</p>
+                                                    <p className="text-xs text-purple-100">Tabs interativas</p>
+                                                </div>
+                                                <i className="fas fa-external-link-alt text-white/70 group-hover:text-white"></i>
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
