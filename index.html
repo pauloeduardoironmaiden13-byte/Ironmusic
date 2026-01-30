@@ -508,12 +508,24 @@
             };
 
             const handlePlay = (track, index = 0) => {
+                console.log('🎵 handlePlay chamado:', track.title);
                 setCurrentTrack(track);
                 setCurrentIndex(index);
                 setIsPlaying(true);
                 setShowFullScreenPlayer(false);
                 setCurrentTime(0);
                 setDuration(0);
+
+                // Força o iframe a recarregar (importante para mobile)
+                setTimeout(() => {
+                    if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                        youtubeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ event: 'command', func: 'playVideo' }),
+                            '*'
+                        );
+                        console.log('🎬 Comando playVideo enviado ao iframe');
+                    }
+                }, 500);
             };
 
             const playNext = () => {
@@ -920,7 +932,19 @@
 
             const getYoutubeEmbed = () => {
                 if (!currentTrack?.youtubeId) return '';
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=${isPlaying ? 1 : 0}&playsinline=1&rel=0&enablejsapi=1&origin=${window.location.origin}`;
+                // Parâmetros otimizados para mobile e desktop
+                const params = new URLSearchParams({
+                    autoplay: isPlaying ? '1' : '0',
+                    mute: '0',                      // Permite áudio (importante!)
+                    playsinline: '1',               // Permite playback inline no iOS
+                    rel: '0',                       // Não mostra vídeos relacionados
+                    modestbranding: '1',            // Remove logo do YouTube
+                    controls: '0',                  // Remove controles nativos
+                    enablejsapi: '1',               // Habilita JS API
+                    origin: window.location.origin,
+                    widgetid: '1'
+                });
+                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params.toString()}`;
             };
 
             const handleSeek = (e) => {
@@ -946,14 +970,19 @@
             };
 
             useEffect(() => {
-                if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                if (youtubeRef.current && youtubeRef.current.contentWindow && currentTrack) {
                     const cmd = isPlaying ? 'playVideo' : 'pauseVideo';
-                    youtubeRef.current.contentWindow.postMessage(
-                        JSON.stringify({ event: 'command', func: cmd }),
-                        '*'
-                    );
+
+                    // Pequeno delay para garantir que iframe carregou
+                    setTimeout(() => {
+                        youtubeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ event: 'command', func: cmd }),
+                            '*'
+                        );
+                        console.log(`🎬 Comando ${cmd} enviado (useEffect)`);
+                    }, 300);
                 }
-            }, [isPlaying]);
+            }, [isPlaying, currentTrack?.youtubeId]); // Reage a mudanças no isPlaying E no youtubeId
 
             const formatTime = (seconds) => {
                 const mins = Math.floor(seconds / 60);
@@ -1328,7 +1357,13 @@
                                     </div>
                                 </div>
                                 {currentTrack.youtubeId && (
-                                    <iframe ref={youtubeRef} className="hidden" src={getYoutubeEmbed()} allow="autoplay" />
+                                    <iframe
+                                        ref={youtubeRef}
+                                        className="hidden"
+                                        src={getYoutubeEmbed()}
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                    />
                                 )}
                             </div>
                         )}
