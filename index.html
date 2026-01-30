@@ -463,8 +463,8 @@
 
                 // Listen for YouTube messages
                 const handleMessage = (event) => {
-                    if (event.origin !== 'https://www.youtube.com') return;
                     try {
+                        if (event.origin !== 'https://www.youtube.com') return;
                         const data = JSON.parse(event.data);
                         if (data.event === 'infoDelivery') {
                             if (data.info && data.info.currentTime !== undefined) {
@@ -476,12 +476,21 @@
                             if (data.info && data.info.playerState !== undefined) {
                                 // 0 = ended, 1 = playing, 2 = paused
                                 if (data.info.playerState === 0) {
-                                    // Video ended, play next
+                                    console.log('🎵 Música terminou! Tocando próxima...');
+                                    // Toca próxima música automaticamente
                                     playNext();
+                                }
+                                // Atualiza estado de playing
+                                if (data.info.playerState === 1) {
+                                    setIsPlaying(true);
+                                } else if (data.info.playerState === 2) {
+                                    setIsPlaying(false);
                                 }
                             }
                         }
-                    } catch (e) { }
+                    } catch (e) {
+                        // Ignora erros de parsing
+                    }
                 };
                 window.addEventListener('message', handleMessage);
                 // Close context menu on click outside
@@ -926,16 +935,17 @@
                 const params = new URLSearchParams({
                     autoplay: '1',
                     playsinline: '1',
-                    rel: '0',
+                    rel: '1',                   // PERMITE vídeos relacionados
                     modestbranding: '1',
                     controls: '1',              // CONTROLES VISÍVEIS!
                     enablejsapi: '1',
                     fs: '1',
+                    iv_load_policy: '3',        // Remove anotações
                     origin: window.location.origin,
                     widgetid: '1'
                 });
                 const url = `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params.toString()}`;
-                console.log('🔗 YouTube URL (PLAYER VISÍVEL):', url);
+                console.log('🔗 YouTube URL (PLAYER VISÍVEL com playlist):', url);
                 return url;
             };
 
@@ -1367,61 +1377,28 @@
                                         <span className="text-xs w-8">{volume}%</span>
                                     </div>
                                 </div>
-                                {currentTrack.youtubeId && (
-                                    <div style={{
-                                        position: 'fixed',
-                                        bottom: '20px',
-                                        right: '20px',
-                                        zIndex: 99999,
-                                        background: 'rgba(0,0,0,0.9)',
-                                        borderRadius: '12px',
-                                        padding: '10px',
-                                        border: '2px solid #fbbf24',
-                                        boxShadow: '0 0 20px rgba(251,191,36,0.5)'
-                                    }}>
-                                        <div style={{
-                                            color: '#fbbf24',
-                                            fontSize: '11px',
-                                            fontWeight: 'bold',
-                                            marginBottom: '5px',
-                                            textAlign: 'center',
-                                            maxWidth: '200px'
-                                        }}>
-                                            👆 CLIQUE NO VÍDEO ABAIXO
-                                        </div>
-                                        <iframe
-                                            key={currentTrack.youtubeId}
-                                            ref={youtubeRef}
-                                            style={{
-                                                width: '200px',
-                                                height: '150px',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                display: 'block'
-                                            }}
-                                            src={getYoutubeEmbed()}
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                            allowFullScreen
-                                            title="YouTube Player"
-                                        />
-                                        <button
-                                            onClick={() => setCurrentTrack(null)}
-                                            style={{
-                                                marginTop: '8px',
-                                                padding: '6px 12px',
-                                                background: '#ef4444',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '6px',
-                                                fontSize: '11px',
-                                                fontWeight: 'bold',
-                                                cursor: 'pointer',
-                                                width: '100%'
-                                            }}
-                                        >
-                                            ✖️ FECHAR
-                                        </button>
-                                    </div>
+                                {currentTrack.youtubeId && showFullScreenPlayer && (
+                                    <iframe
+                                        key={currentTrack.youtubeId}
+                                        ref={youtubeRef}
+                                        style={{
+                                            position: 'fixed',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, calc(-50% + 60px))',
+                                            width: '64px',
+                                            height: '64px',
+                                            opacity: 0.01,
+                                            pointerEvents: 'auto',
+                                            zIndex: 99999,
+                                            border: 'none',
+                                            borderRadius: '50%'
+                                        }}
+                                        src={getYoutubeEmbed()}
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        allowFullScreen
+                                        title="YouTube Player"
+                                    />
                                 )}
                             </div>
                         )}
