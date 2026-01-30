@@ -1367,28 +1367,61 @@
                                         <span className="text-xs w-8">{volume}%</span>
                                     </div>
                                 </div>
-                                {currentTrack.youtubeId && showFullScreenPlayer && (
-                                    <iframe
-                                        key={currentTrack.youtubeId}
-                                        ref={youtubeRef}
-                                        style={{
-                                            position: 'fixed',
-                                            top: '50%',
-                                            left: '50%',
-                                            transform: 'translate(-50%, calc(-50% + 60px))',
-                                            width: '64px',
-                                            height: '64px',
-                                            opacity: 0,
-                                            pointerEvents: 'auto',
-                                            zIndex: 99999,
-                                            border: 'none',
-                                            borderRadius: '50%'
-                                        }}
-                                        src={getYoutubeEmbed()}
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                        allowFullScreen
-                                        title="YouTube Player"
-                                    />
+                                {currentTrack.youtubeId && (
+                                    <div style={{
+                                        position: 'fixed',
+                                        bottom: '20px',
+                                        right: '20px',
+                                        zIndex: 99999,
+                                        background: 'rgba(0,0,0,0.9)',
+                                        borderRadius: '12px',
+                                        padding: '10px',
+                                        border: '2px solid #fbbf24',
+                                        boxShadow: '0 0 20px rgba(251,191,36,0.5)'
+                                    }}>
+                                        <div style={{
+                                            color: '#fbbf24',
+                                            fontSize: '11px',
+                                            fontWeight: 'bold',
+                                            marginBottom: '5px',
+                                            textAlign: 'center',
+                                            maxWidth: '200px'
+                                        }}>
+                                            👆 CLIQUE NO VÍDEO ABAIXO
+                                        </div>
+                                        <iframe
+                                            key={currentTrack.youtubeId}
+                                            ref={youtubeRef}
+                                            style={{
+                                                width: '200px',
+                                                height: '150px',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                display: 'block'
+                                            }}
+                                            src={getYoutubeEmbed()}
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                            title="YouTube Player"
+                                        />
+                                        <button
+                                            onClick={() => setCurrentTrack(null)}
+                                            style={{
+                                                marginTop: '8px',
+                                                padding: '6px 12px',
+                                                background: '#ef4444',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                fontSize: '11px',
+                                                fontWeight: 'bold',
+                                                cursor: 'pointer',
+                                                width: '100%'
+                                            }}
+                                        >
+                                            ✖️ FECHAR
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         )}
