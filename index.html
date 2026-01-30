@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="referrer" content="no-referrer-when-downgrade">
     <title>IronMusic - Rock Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -18,308 +18,68 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        :root {
-            --glass-border: rgba(255, 255, 255, 0.08);
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            overflow-x: hidden;
-            background: #000;
-            color: #fff;
-            touch-action: manipulation;
-        }
-
-        /* Mobile optimizations */
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        :root { --glass-border: rgba(255, 255, 255, 0.08); }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow-x: hidden; background: #000; color: #fff; touch-action: manipulation; }
+        
         @media (max-width: 768px) {
-            body {
-                font-size: 14px;
-            }
-
-            h1 {
-                font-size: 1.5rem !important;
-            }
-
-            h2 {
-                font-size: 1.25rem !important;
-            }
-
-            .music-card {
-                padding: 0.5rem !important;
-            }
+            body { font-size: 14px; }
+            h1 { font-size: 1.5rem !important; }
+            h2 { font-size: 1.25rem !important; }
+            .music-card { padding: 0.5rem !important; }
         }
 
-        .rock-font {
-            font-family: Impact, 'Arial Black', 'Helvetica', sans-serif;
-            font-weight: 900;
-            letter-spacing: 2px;
-        }
+        .rock-font { font-family: Impact, 'Arial Black', 'Helvetica', sans-serif; font-weight: 900; letter-spacing: 2px; }
+        .glass-nav { background: rgba(10, 10, 10, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+        .bg-wallpaper { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; opacity: 0.5; z-index: 0; transition: opacity 0.5s ease; }
+        .bg-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.3); z-index: 1; }
+        .bg-yellow { background-image: url('https://wallpapercave.com/wp/ZA2hmZU.jpg'); }
+        .bg-purple { background-image: url('https://www.portaldoinferno.com.br/wp-content/uploads/2020/06/wallpaper-iron-maiden-the-final-frontier-4k-download.jpg'); }
+        .bg-green { background-image: url('https://i.pinimg.com/1200x/f6/4b/57/f64b573b709235d4aefc07ba709fd877.jpg'); }
+        
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spin-slow { animation: spin 10s linear infinite; }
+        .music-card { transition: all 0.3s ease; }
+        .music-card:hover { transform: translateY(-8px); box-shadow: 0 12px 24px rgba(255, 255, 255, 0.1); }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 
-        .glass-nav {
-            background: rgba(10, 10, 10, 0.85);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--glass-border);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-        }
+        input[type="range"] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.2); cursor: pointer; touch-action: none; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: white; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
+        input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: white; cursor: pointer; border: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); }
 
-        .bg-wallpaper {
+        .vinyl-disc { border-radius: 50%; position: relative; overflow: hidden; }
+        .vinyl-disc::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; border-radius: 50%; z-index: 1; box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 0, 0, 0.5); }
+        .vinyl-disc::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.02) 0deg, rgba(255, 255, 255, 0.02) 1deg, transparent 1deg, transparent 2deg); border-radius: 50%; pointer-events: none; z-index: 2; }
+        .vinyl-disc img, .vinyl-disc .vinyl-label { position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: 45% !important; height: 45% !important; border-radius: 50% !important; z-index: 3 !important; object-fit: cover !important; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5) !important; }
+        .vinyl-hole { position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: 15% !important; height: 15% !important; background: #000 !important; border-radius: 50% !important; z-index: 4 !important; box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.9), 0 0 3px rgba(255, 255, 255, 0.3) !important; }
+
+        .mini-player { position: fixed; bottom: 60px; left: 0; right: 0; background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(20px); border-top: 1px solid rgba(255, 255, 255, 0.1); z-index: 40; padding: 0.75rem 1rem; }
+        @media (max-width: 768px) { .mini-player { bottom: 56px; padding: 0.5rem 0.75rem; } }
+
+        .context-menu { position: fixed; background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 4px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); z-index: 1000; min-width: 150px; }
+        .context-menu-item { padding: 8px 12px; cursor: pointer; border-radius: 4px; transition: background 0.2s; }
+        .context-menu-item:hover { background: rgba(255, 255, 255, 0.1); }
+        .context-menu-item.danger { color: #ef4444; }
+        .context-menu-item.danger:hover { background: rgba(239, 68, 68, 0.2); }
+
+        .debug-console { position: fixed; bottom: 80px; right: 10px; background: rgba(0, 0, 0, 0.9); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 10px; padding: 10px; max-width: 300px; max-height: 200px; overflow-y: auto; font-size: 10px; font-family: monospace; z-index: 150; }
+        .debug-console::-webkit-scrollbar { width: 4px; }
+        .debug-console::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 2px; }
+        
+        /* YouTube Player fix for Android */
+        #youtube-player-container {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-size: cover;
-            background-position: center;
-            opacity: 0.5;
-            /* AUMENTADO para 0.5 */
-            z-index: 0;
-            transition: opacity 0.5s ease;
-        }
-
-        .bg-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.3);
-            /* REDUZIDO para 30% */
-            z-index: 1;
-        }
-
-        .bg-yellow {
-            background-image: url('https://wallpapercave.com/wp/ZA2hmZU.jpg');
-        }
-
-        .bg-purple {
-            background-image: url('https://www.portaldoinferno.com.br/wp-content/uploads/2020/06/wallpaper-iron-maiden-the-final-frontier-4k-download.jpg');
-        }
-
-        .bg-green {
-            background-image: url('https://i.pinimg.com/1200x/f6/4b/57/f64b573b709235d4aefc07ba709fd877.jpg');
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        .spin-slow {
-            animation: spin 10s linear infinite;
-        }
-
-        .music-card {
-            transition: all 0.3s ease;
-        }
-
-        .music-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 12px 24px rgba(255, 255, 255, 0.1);
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        /* Progress bar styling */
-        input[type="range"] {
-            -webkit-appearance: none;
-            appearance: none;
-            height: 6px;
-            border-radius: 3px;
-            background: rgba(255, 255, 255, 0.2);
-            cursor: pointer;
-            touch-action: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: white;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-
-        input[type="range"]::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: white;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-
-        /* Vinyl Disc Effect - Realistic with center label */
-        .vinyl-disc {
-            border-radius: 50%;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .vinyl-disc::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: #1a1a1a;
-            border-radius: 50%;
-            z-index: 1;
-            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 0, 0, 0.5);
-        }
-
-        .vinyl-disc::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: repeating-conic-gradient(from 0deg,
-                    rgba(255, 255, 255, 0.02) 0deg,
-                    rgba(255, 255, 255, 0.02) 1deg,
-                    transparent 1deg,
-                    transparent 2deg);
-            border-radius: 50%;
+            z-index: -10; /* Behind everything */
             pointer-events: none;
-            z-index: 2;
-        }
-
-        .vinyl-disc img,
-        .vinyl-disc .vinyl-label {
-            position: absolute !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            width: 45% !important;
-            height: 45% !important;
-            border-radius: 50% !important;
-            z-index: 3 !important;
-            object-fit: cover !important;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5) !important;
-        }
-
-        /* Vinyl center hole */
-        .vinyl-hole {
-            position: absolute !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            width: 15% !important;
-            height: 15% !important;
-            background: #000 !important;
-            border-radius: 50% !important;
-            z-index: 4 !important;
-            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.9), 0 0 3px rgba(255, 255, 255, 0.3) !important;
-        }
-
-        /* Mini Player */
-        .mini-player {
-            position: fixed;
-            bottom: 60px;
-            left: 0;
-            right: 0;
-            background: rgba(0, 0, 0, 0.95);
-            backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 40;
-            padding: 0.75rem 1rem;
-        }
-
-        @media (max-width: 768px) {
-            .mini-player {
-                bottom: 56px;
-                padding: 0.5rem 0.75rem;
-            }
-        }
-
-        /* Context Menu */
-        .context-menu {
-            position: fixed;
-            background: rgba(20, 20, 20, 0.95);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 4px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            min-width: 150px;
-        }
-
-        .context-menu-item {
-            padding: 8px 12px;
-            cursor: pointer;
-            border-radius: 4px;
-            transition: background 0.2s;
-        }
-
-        .context-menu-item:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .context-menu-item.danger {
-            color: #ef4444;
-        }
-
-        .context-menu-item.danger:hover {
-            background: rgba(239, 68, 68, 0.2);
-        }
-
-        /* Debug Console */
-        .debug-console {
-            position: fixed;
-            bottom: 80px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            padding: 10px;
-            max-width: 300px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-size: 10px;
-            font-family: monospace;
-            z-index: 150;
-        }
-
-        .debug-console::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .debug-console::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
+            opacity: 1 !important; /* Android pauses opacity 0 videos */
         }
     </style>
 </head>
@@ -340,33 +100,18 @@
         };
 
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A";
-
-        // Sistema de rotação de 3 chaves API - 300 pesquisas/dia (100 por chave)
         const YOUTUBE_API_KEYS = [
-            "AIzaSyCWYR0b-5qGWk7Eto4h5sZIErelcd5_bfg",  // Chave 1
-            "AIzaSyB5OFcKTtj4S7jd65SEJOmv8UAPDihgb9o",  // Chave 2
-            "AIzaSyB_pXiKr3mJOZbyKX8OBLLL7s4z9mLdn2Y"   // Chave 3
+            "AIzaSyCWYR0b-5qGWk7Eto4h5sZIErelcd5_bfg",
+            "AIzaSyB5OFcKTtj4S7jd65SEJOmv8UAPDihgb9o",
+            "AIzaSyB_pXiKr3mJOZbyKX8OBLLL7s4z9mLdn2Y"
         ];
         let currentKeyIndex = 0;
-        let keyUsageCount = [0, 0, 0]; // Contador de uso de cada chave
+        let keyUsageCount = [0, 0, 0];
 
-        // Função para obter a chave atual
-        const getYouTubeAPIKey = () => {
-            return YOUTUBE_API_KEYS[currentKeyIndex];
-        };
-
-        // Função para rotacionar para a próxima chave
+        const getYouTubeAPIKey = () => YOUTUBE_API_KEYS[currentKeyIndex];
         const rotateAPIKey = () => {
-            const previousIndex = currentKeyIndex;
             currentKeyIndex = (currentKeyIndex + 1) % YOUTUBE_API_KEYS.length;
-            console.log(`🔄 Rotacionando chave API: ${previousIndex + 1} → ${currentKeyIndex + 1}/${YOUTUBE_API_KEYS.length}`);
             return getYouTubeAPIKey();
-        };
-
-        // Função para registrar uso da chave
-        const logKeyUsage = () => {
-            keyUsageCount[currentKeyIndex]++;
-            console.log(`📊 Uso de chaves: [${keyUsageCount.join(', ')}] | Total: ${keyUsageCount.reduce((a, b) => a + b, 0)}`);
         };
 
         let db = null;
@@ -375,9 +120,7 @@
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
             }
-        } catch (e) {
-            console.error("Firebase error:", e);
-        }
+        } catch (e) { console.error("Firebase error:", e); }
 
         const Icons = {
             Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>,
@@ -386,11 +129,10 @@
             Pause: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>,
             Skip: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4" /><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" strokeWidth="2" /></svg>,
             SkipBack: (p) => <svg {...p} viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20" /><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" strokeWidth="2" /></svg>,
-            ThumbsUp: ({ filled, ...p }) => <svg {...p} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M7 22V11M2 13v6a2 2 0 0 0 2 2h12.5a2.5 2.5 0 0 0 2.5-2.5v-6a2.5 2.5 0 0 0-2.5-2.5H10l1.5-6a2 2 0 0 0-2-2 2 2 0 0 0-2 2L7 11H4a2 2 0 0 0-2 2Z" /></svg>,
+            Volume: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>,
             Guitar: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m11.9 12.1 4.514-4.514" /><path d="M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z" /><path d="m6 16 2 2" /><path d="M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z" /><circle cx="11.5" cy="12.5" r=".5" fill="currentColor" /></svg>,
             ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7V5c0-1.1.9-2 2-2h2" /><path d="M17 3h2c1.1 0 2 .9 2 2v2" /><path d="M21 17v2c0 1.1-.9 2-2 2h-2" /><path d="M7 21H5c-1.1 0-2-.9-2-2v-2" /><path d="M7 8h8" /><path d="M7 12h10" /><path d="M7 16h6" /></svg>,
-            ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>,
-            Volume: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
+            ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
         };
 
         function App() {
@@ -411,164 +153,111 @@
             const [albumTracks, setAlbumTracks] = useState([]);
             const [loading, setLoading] = useState(false);
             const [loadingTracks, setLoadingTracks] = useState(false);
-
-            // Debug Console
-            const [showDebugConsole, setShowDebugConsole] = useState(true);
+            const [showDebugConsole, setShowDebugConsole] = useState(false);
             const [debugLogs, setDebugLogs] = useState([]);
             const [bandInfo, setBandInfo] = useState(null);
             const [showBandInfo, setShowBandInfo] = useState(false);
             const [lyrics, setLyrics] = useState(null);
             const [loadingLyrics, setLoadingLyrics] = useState(false);
             const [contextMenu, setContextMenu] = useState(null);
+            const [isBuffering, setIsBuffering] = useState(false);
 
             const youtubeRef = useRef(null);
-            const playerRef = useRef(null);
-
-            // Função de Debug
-            const addDebugLog = (msg, type = 'info') => {
-                const timestamp = new Date().toLocaleTimeString('pt-BR');
-                const logEntry = `[${timestamp}] ${msg}`;
-                console.log(logEntry);
-                setDebugLogs(prev => [...prev.slice(-20), { msg: logEntry, type }]); // Mantém últimas 20 entradas
-            };
             const progressInterval = useRef(null);
-            const forcePlayInterval = useRef(null); // Ref para o intervalo de forcePlay
+            const retryPlayInterval = useRef(null);
+
+            const addDebugLog = (msg, type = 'info') => {
+                const logEntry = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                console.log(logEntry);
+                setDebugLogs(prev => [...prev.slice(-20), { msg: logEntry, type }]);
+            };
 
             useEffect(() => {
                 loadMusicLibrary();
-
-                // Update progress bar from YouTube - more frequent updates
-                if (isPlaying && youtubeRef.current) {
-                    progressInterval.current = setInterval(() => {
-                        if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                            youtubeRef.current.contentWindow.postMessage(
-                                JSON.stringify({ event: 'listening', id: 1 }),
-                                '*'
-                            );
-                        }
-                    }, 500);  // Update every 500ms for smoother progress
-                } else {
-                    if (progressInterval.current) {
-                        clearInterval(progressInterval.current);
-                    }
-                }
-
-                return () => {
-                    if (progressInterval.current) {
-                        clearInterval(progressInterval.current);
-                    }
-                };
-            }, [isPlaying]);
-
-            useEffect(() => {
-                loadMusicLibrary();
-
-                // Listen for YouTube messages
                 const handleMessage = (event) => {
-                    if (event.origin !== 'https://www.youtube.com') return;
+                    // Aceita qualquer origem para funcionar no WebView (file://)
                     try {
                         const data = JSON.parse(event.data);
                         if (data.event === 'infoDelivery') {
-                            if (data.info && data.info.currentTime !== undefined) {
-                                setCurrentTime(data.info.currentTime);
-                                // Se o currentTime > 0, o vídeo começou, podemos parar de forçar
-                                if (data.info.currentTime > 0.5 && forcePlayInterval.current) {
-                                    clearInterval(forcePlayInterval.current);
-                                    forcePlayInterval.current = null;
-                                }
-                            }
-                            if (data.info && data.info.duration !== undefined) {
-                                setDuration(data.info.duration);
-                            }
+                            if (data.info && data.info.currentTime) setCurrentTime(data.info.currentTime);
+                            if (data.info && data.info.duration) setDuration(data.info.duration);
                             if (data.info && data.info.playerState !== undefined) {
-                                // 0 = ended, 1 = playing, 2 = paused
+                                // -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
                                 if (data.info.playerState === 1) {
                                     setIsPlaying(true);
-                                    // Limpa intervalo de força bruta se estiver tocando
-                                    if(forcePlayInterval.current) clearInterval(forcePlayInterval.current);
+                                    setIsBuffering(false);
+                                    if(retryPlayInterval.current) clearInterval(retryPlayInterval.current);
                                 }
-                                if (data.info.playerState === 0) {
-                                    // Video ended, play next
-                                    playNext();
-                                }
+                                if (data.info.playerState === 2) setIsPlaying(false);
+                                if (data.info.playerState === 3) setIsBuffering(true);
+                                if (data.info.playerState === 0) playNext();
                             }
                         }
                     } catch (e) { }
                 };
                 window.addEventListener('message', handleMessage);
-                // Close context menu on click outside
                 const handleClick = () => setContextMenu(null);
                 document.addEventListener('click', handleClick);
                 return () => {
                     document.removeEventListener('click', handleClick);
                     window.removeEventListener('message', handleMessage);
-                    if(forcePlayInterval.current) clearInterval(forcePlayInterval.current);
+                    if (retryPlayInterval.current) clearInterval(retryPlayInterval.current);
                 };
             }, []);
+
+            useEffect(() => {
+                if (isPlaying && youtubeRef.current) {
+                    progressInterval.current = setInterval(() => {
+                        if (youtubeRef.current?.contentWindow) {
+                            youtubeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*');
+                        }
+                    }, 500);
+                } else {
+                    if (progressInterval.current) clearInterval(progressInterval.current);
+                }
+                return () => { if (progressInterval.current) clearInterval(progressInterval.current); };
+            }, [isPlaying]);
+
+            // Força o play quando a track muda
+            useEffect(() => {
+                if(currentTrack && youtubeRef.current) {
+                    setIsBuffering(true);
+                    
+                    // Tenta forçar o play agressivamente por 5 segundos
+                    let attempts = 0;
+                    if(retryPlayInterval.current) clearInterval(retryPlayInterval.current);
+                    
+                    retryPlayInterval.current = setInterval(() => {
+                        attempts++;
+                        if(attempts > 10) clearInterval(retryPlayInterval.current);
+                        
+                        if (youtubeRef.current?.contentWindow) {
+                            youtubeRef.current.contentWindow.postMessage(
+                                JSON.stringify({ event: 'command', func: 'playVideo' }), '*'
+                            );
+                        }
+                    }, 500);
+                }
+            }, [currentTrack]);
 
             const loadMusicLibrary = async () => {
                 if (!db) return;
                 try {
                     const snapshot = await db.collection('song_cache').orderBy('createdAt', 'desc').limit(50).get();
                     const songs = [];
-                    snapshot.forEach(doc => {
-                        songs.push({ id: doc.id, ...doc.data() });
-                    });
+                    snapshot.forEach(doc => songs.push({ id: doc.id, ...doc.data() }));
                     setMusicLibrary(songs);
-                } catch (e) {
-                    console.error(e);
-                }
+                } catch (e) { console.error(e); }
             };
 
             const handlePlay = (track, index = 0) => {
-                console.log('🎵 handlePlay chamado:', track.title);
                 setCurrentTrack(track);
                 setCurrentIndex(index);
                 setIsPlaying(true);
                 setShowFullScreenPlayer(false);
                 setCurrentTime(0);
                 setDuration(0);
-
-                // Limpa intervalo anterior se existir
-                if (forcePlayInterval.current) clearInterval(forcePlayInterval.current);
-
-                // Para WebView/Kodular: força play com múltiplas tentativas agressivas
-                const forcePlay = () => {
-                    if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                        try {
-                            // Tenta múltiplos comandos
-                            youtubeRef.current.contentWindow.postMessage(
-                                JSON.stringify({ event: 'command', func: 'playVideo' }),
-                                '*'
-                            );
-                            youtubeRef.current.contentWindow.postMessage(
-                                JSON.stringify({ event: 'command', func: 'unMute' }),
-                                '*'
-                            );
-                             // Definir volume 100 pode ser bloqueado em mobile, mas tentamos
-                            youtubeRef.current.contentWindow.postMessage(
-                                JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }),
-                                '*'
-                            );
-                            console.log('🎬 Comando enviado no mobile');
-                        } catch (e) {
-                            console.error('Erro ao enviar comandos:', e);
-                        }
-                    }
-                };
-
-                // Tenta imediatamente
-                forcePlay();
-                
-                // Repete a cada 1 segundo por 10 segundos ou até começar (gerenciado pelo useEffect de mensagens)
-                let attempts = 0;
-                forcePlayInterval.current = setInterval(() => {
-                    attempts++;
-                    if(attempts > 15) { // Para após 15 segundos tentando
-                        clearInterval(forcePlayInterval.current);
-                    }
-                    forcePlay();
-                }, 1000);
+                setIsBuffering(true);
             };
 
             const playNext = () => {
@@ -583,459 +272,152 @@
                 handlePlay(musicLibrary[prevIndex], prevIndex);
             };
 
-            const toggleLike = async (e, track) => {
-                e.stopPropagation();
-                const newLiked = !track.liked;
-                if (db) {
-                    await db.collection('song_cache').doc(track.id).update({ liked: newLiked });
-                }
-                loadMusicLibrary();
-            };
-
             const handleContextMenu = (e, track) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setContextMenu({
-                    x: e.clientX,
-                    y: e.clientY,
-                    track: track
-                });
+                e.preventDefault(); e.stopPropagation();
+                setContextMenu({ x: e.clientX, y: e.clientY, track: track });
             };
 
             const deleteTrack = async (track) => {
-                if (!confirm(`Excluir "${track.title}" de ${track.artist}?`)) return;
-
+                if (!confirm(`Excluir "${track.title}"?`)) return;
                 try {
-                    if (db) {
-                        await db.collection('song_cache').doc(track.id).delete();
-                    }
-
-                    // If currently playing, stop it
-                    if (currentTrack?.id === track.id) {
-                        setCurrentTrack(null);
-                        setShowFullScreenPlayer(false);
-                        setIsPlaying(false);
-                    }
-
+                    if (db) await db.collection('song_cache').doc(track.id).delete();
+                    if (currentTrack?.id === track.id) { setCurrentTrack(null); setIsPlaying(false); }
                     loadMusicLibrary();
                     setContextMenu(null);
-                } catch (e) {
-                    console.error('Erro ao excluir:', e);
-                    alert('Erro ao excluir música');
-                }
+                } catch (e) { alert('Erro ao excluir'); }
             };
 
             const searchMusic = async () => {
                 if (!searchQuery) return;
-                setLoading(true);
-                setSelectedAlbum(null);
+                setLoading(true); setSelectedAlbum(null);
                 try {
-                    // Search for both songs and albums
                     const [songRes, albumRes] = await Promise.all([
                         fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=song&limit=10`),
                         fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=album&limit=10`)
                     ]);
-
                     const [songData, albumData] = await Promise.all([songRes.json(), albumRes.json()]);
-
-                    // Combine and deduplicate results
                     const albums = new Map();
-
-                    // Add albums from album search
-                    if (albumData.results) {
-                        albumData.results.forEach(r => {
-                            if (r.collectionId) {
-                                albums.set(r.collectionId, {
-                                    name: r.collectionName,
-                                    artist: r.artistName,
-                                    artwork: (r.artworkUrl100 || '').replace('100x100', '600x600'),
-                                    collectionId: r.collectionId
-                                });
-                            }
-                        });
-                    }
-
-                    // Add albums from song search
-                    if (songData.results) {
-                        songData.results.forEach(r => {
+                    const process = (list) => {
+                        if(!list) return;
+                        list.forEach(r => {
                             if (r.collectionId && !albums.has(r.collectionId)) {
                                 albums.set(r.collectionId, {
-                                    name: r.collectionName,
-                                    artist: r.artistName,
+                                    name: r.collectionName, artist: r.artistName,
                                     artwork: (r.artworkUrl100 || '').replace('100x100', '600x600'),
                                     collectionId: r.collectionId
                                 });
                             }
                         });
-                    }
-
+                    };
+                    process(albumData.results); process(songData.results);
                     setSearchResults(Array.from(albums.values()));
-                } catch (e) {
-                    console.error('Search error:', e);
-                    setSearchResults([]);
-                } finally {
-                    setLoading(false);
-                }
+                } catch (e) { setSearchResults([]); } finally { setLoading(false); }
             };
 
             const fetchAlbumTracks = async (album) => {
-                setSelectedAlbum(album);
-                setLoadingTracks(true);
+                setSelectedAlbum(album); setLoadingTracks(true);
                 try {
-                    // Use CORS proxy for local development
-                    const apiUrl = `https://itunes.apple.com/lookup?id=${album.collectionId}&entity=song&limit=200`;
-                    const res = await fetch(apiUrl);
+                    const res = await fetch(`https://itunes.apple.com/lookup?id=${album.collectionId}&entity=song&limit=200`);
                     const data = await res.json();
-
-                    console.log('iTunes API Response:', data); // Debug
-
                     if (data.results && data.results.length > 1) {
-                        // Filter out the album info (first result) and map tracks
-                        const tracks = data.results
-                            .slice(1)
-                            .filter(track => track.wrapperType === 'track' && track.kind === 'song')
-                            .map((track, idx) => {
-                                // Ensure we get the actual track name, not artist name
-                                const trackName = track.trackName || track.trackCensoredName || `Track ${idx + 1}`;
-
-                                return {
-                                    id: `${album.collectionId}-${track.trackId || Date.now() + idx}`,
-                                    title: trackName,
-                                    artist: track.artistName || album.artist,
-                                    artwork: (track.artworkUrl100 || album.artwork || '').replace('100x100', '600x600'),
-                                    trackNumber: track.trackNumber || idx + 1,
-                                    collectionId: album.collectionId
-                                };
-                            });
-
-                        console.log('Processed tracks:', tracks); // Debug
-
-                        if (tracks.length > 0) {
-                            setAlbumTracks(tracks);
-                        } else {
-                            setAlbumTracks([]);
-                            alert('Nenhuma música encontrada neste álbum. Tente outro.');
-                        }
-                    } else {
-                        setAlbumTracks([]);
-                        alert('Álbum não contém músicas disponíveis.');
-                    }
-                } catch (e) {
-                    console.error('Error fetching tracks:', e);
-                    setAlbumTracks([]);
-                    alert('Erro ao carregar músicas do álbum. Tente novamente.');
-                } finally {
-                    setLoadingTracks(false);
-                }
+                        const tracks = data.results.slice(1).filter(t => t.wrapperType === 'track').map((t, idx) => ({
+                            id: `${album.collectionId}-${t.trackId || idx}`,
+                            title: t.trackName || t.trackCensoredName,
+                            artist: t.artistName || album.artist,
+                            artwork: (t.artworkUrl100 || album.artwork || '').replace('100x100', '600x600'),
+                            trackNumber: t.trackNumber || idx + 1,
+                            collectionId: album.collectionId,
+                            albumName: album.name
+                        }));
+                        setAlbumTracks(tracks.length ? tracks : []);
+                    } else setAlbumTracks([]);
+                } catch (e) { setAlbumTracks([]); } finally { setLoadingTracks(false); }
             };
 
             const selectTrackFromSearch = async (track) => {
                 setLoadingTracks(true);
-                let lastError = null;
                 let attemptCount = 0;
-                const maxAttempts = YOUTUBE_API_KEYS.length; // Tenta com todas as chaves disponíveis
-
                 try {
-                    addDebugLog(`🎵 Selecionando: ${track.title} - ${track.artist}`, 'info');
-                    console.log('🎵 Selecionando música:', track);
-
-                    // Fecha modal e mostra loading
                     setView('home');
-
-                    // Busca YouTube ID via API com retry automático
-                    const searchQuery = `${track.artist} ${track.title} official audio`;
-                    console.log('🔍 Buscando no YouTube:', searchQuery);
-
-                    let data = null;
+                    const q = `${track.artist} ${track.title} official audio`;
                     let youtubeId = null;
-
-                    // Loop de tentativas com rotação de chaves
-                    while (attemptCount < maxAttempts) {
-                        const currentKey = getYouTubeAPIKey();
-                        const keyNumber = currentKeyIndex + 1;
-
-                        console.log(`🔑 Tentativa ${attemptCount + 1}/${maxAttempts} com Chave ${keyNumber}`);
-                        addDebugLog(`🔑 Usando Chave ${keyNumber}`, 'info');
-
+                    while (attemptCount < YOUTUBE_API_KEYS.length) {
+                        const key = getYouTubeAPIKey();
                         try {
-                            const res = await fetch(
-                                `https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${currentKey}&type=video&videoEmbeddable=true&videoCategoryId=10&maxResults=1`
-                            );
-
-                            console.log('📡 Status da API:', res.status, res.statusText);
-                            addDebugLog(`📡 API Status: ${res.status}`, res.ok ? 'success' : 'error');
-
+                            const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(q)}&key=${key}&type=video&maxResults=1`);
                             if (!res.ok) {
-                                const errorText = await res.text();
-
-                                // Tenta parsear o erro JSON
-                                let errorData = null;
-                                try {
-                                    errorData = JSON.parse(errorText);
-                                    console.error('📋 Detalhes do erro:', errorData);
-                                } catch (parseError) {
-                                    console.error('Erro ao parsear resposta:', parseError);
-                                }
-
-                                // Verifica se é erro de quota (403)
-                                if (res.status === 403 && errorData?.error?.message?.includes('quota')) {
-                                    console.warn(`⚠️ Quota esgotada na Chave ${keyNumber}. Rotacionando...`);
-                                    addDebugLog(`⚠️ Quota esgotada! Tentando Chave ${keyNumber + 1}`, 'error');
-
-                                    // Rotaciona para próxima chave
-                                    rotateAPIKey();
-                                    attemptCount++;
-                                    lastError = new Error(`Quota esgotada na chave ${keyNumber}`);
-                                    continue; // Tenta novamente com próxima chave
-                                } else {
-                                    // Outro tipo de erro - lança exceção
-                                    console.error('❌ Resposta de erro completa:', errorText);
-                                    addDebugLog(`❌ API Erro: ${res.status} - ${errorText.substring(0, 100)}`, 'error');
-
-                                    if (errorData?.error?.message) {
-                                        addDebugLog(`💬 Mensagem: ${errorData.error.message}`, 'error');
-                                    }
-
-                                    throw new Error(`YouTube API retornou erro ${res.status}`);
-                                }
+                                if (res.status === 403) { rotateAPIKey(); attemptCount++; continue; }
+                                throw new Error('API Error');
                             }
-
-                            // Sucesso! Registra uso da chave
-                            logKeyUsage();
-
-                            data = await res.json();
-                            console.log('📺 Resposta YouTube API:', data);
-                            addDebugLog(`📺 YouTube API: ${data.items?.length || 0} resultados`, 'info');
-
-                            if (data.items && data.items.length > 0) {
-                                youtubeId = data.items[0].id.videoId;
-                                console.log('✅ YouTube ID encontrado:', youtubeId);
-                                addDebugLog(`✅ YouTube ID: ${youtubeId}`, 'success');
-                                break; // Sucesso - sai do loop
-                            } else {
-                                console.error('❌ Nenhum vídeo encontrado no YouTube');
-                                throw new Error('Música não encontrada no YouTube');
-                            }
-
-                        } catch (fetchError) {
-                            // Se não for erro de quota, propaga exceção
-                            if (!fetchError.message?.includes('quota')) {
-                                throw fetchError;
-                            }
-                            lastError = fetchError;
-                            attemptCount++;
-                        }
+                            const data = await res.json();
+                            if (data.items?.length) { youtubeId = data.items[0].id.videoId; break; }
+                        } catch (e) { attemptCount++; }
                     }
+                    if (!youtubeId) { alert('Música não encontrada no YouTube'); return; }
 
-                    // Se esgotou todas as tentativas
-                    if (!youtubeId) {
-                        console.error('❌ Todas as chaves API esgotaram a quota!');
-                        addDebugLog('❌ Todas as 3 chaves sem quota!', 'error');
-                        alert('⚠️ Limite de buscas atingido em todas as chaves API. Tente novamente amanhã ou adicione mais chaves.');
-                        return;
-                    }
-
-                    // Cria objeto completo de música
                     const newSong = {
                         id: `${track.collectionId}-${Date.now()}`,
-                        title: track.title,
-                        artist: track.artist,
-                        youtubeId: youtubeId,
-                        artwork: track.artwork,
-                        albumName: track.albumName || 'Desconhecido',
-                        liked: false,
-                        addedAt: new Date().toISOString(),
+                        title: track.title, artist: track.artist, youtubeId: youtubeId,
+                        artwork: track.artwork, albumName: track.albumName || 'Unknown',
+                        liked: false, addedAt: new Date().toISOString(),
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
                     };
-
-                    // Salva no Firebase
                     if (db) {
-                        try {
-                            const docRef = await db.collection('song_cache').add(newSong);
-                            newSong.id = docRef.id;
-
-                            console.log('💾 ============ FIREBASE SAVE ============');
-                            console.log('💾 Documento salvo com ID:', docRef.id);
-                            console.log('💾 YouTube ID salvo:', youtubeId);
-                            console.log('💾 Título:', track.title);
-                            console.log('💾 Artista:', track.artist);
-                            console.log('💾 ========================================');
-
-                            addDebugLog(`💾 Firebase ID: ${docRef.id}`, 'success');
-                            addDebugLog(`🎬 YouTube ID: ${youtubeId}`, 'success');
-                        } catch (e) {
-                            console.error('❌ Erro ao salvar no Firebase:', e);
-                            addDebugLog(`❌ Erro Firebase: ${e.message}`, 'error');
-                        }
+                        const doc = await db.collection('song_cache').add(newSong);
+                        newSong.id = doc.id;
                     }
-
-                    // Atualiza estados
-                    setCurrentTrack(newSong);
-                    setCurrentIndex(0);
-                    setIsPlaying(true);
-                    setShowFullScreenPlayer(false);
-
-                    // Recarrega biblioteca
+                    handlePlay(newSong);
                     loadMusicLibrary();
-
-                    console.log('🎸 Tocando agora:', newSong.title);
-
-                } catch (e) {
-                    console.error('❌ Erro ao buscar/salvar:', e);
-                    addDebugLog(`❌ Erro: ${e.message}`, 'error');
-                    alert(`Erro: ${e.message}`);
-                } finally {
-                    setLoadingTracks(false);
-                }
-            };
-
-            const fetchAutocompleteResults = async (query) => {
-                if (query.length < 3) {
-                    setAutocompleteResults([]);
-                    return;
-                }
-                try {
-                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=5`);
-                    const data = await res.json();
-                    if (data.results) {
-                        const uniqueResults = [];
-                        const seen = new Set();
-                        data.results.forEach(r => {
-                            const key = `${r.artistName}-${r.trackName}`;
-                            if (!seen.has(key)) {
-                                seen.add(key);
-                                uniqueResults.push({
-                                    title: r.trackName,
-                                    artist: r.artistName,
-                                    artwork: (r.artworkUrl100 || '').replace('100x100', '600x600'),
-                                    collectionId: r.collectionId
-                                });
-                            }
-                        });
-                        setAutocompleteResults(uniqueResults);
-                    }
-                } catch (e) {
-                    console.error('Autocomplete error:', e);
-                    setAutocompleteResults([]);
-                }
+                } catch (e) { alert('Erro ao buscar'); } finally { setLoadingTracks(false); }
             };
 
             const fetchBandInfo = async (artist) => {
-                setBandInfo({ artist, content: '', loading: true });
-                setShowBandInfo(true);
+                setBandInfo({ artist, content: '', loading: true }); setShowBandInfo(true);
                 try {
-                    // Try Wikipedia API first
                     const wikiSearch = await fetch(`https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=extracts&exintro=1&explaintext=1&titles=${encodeURIComponent(artist)}`);
                     const wikiData = await wikiSearch.json();
-                    const pages = wikiData.query?.pages;
-                    const pageId = Object.keys(pages)[0];
-                    let content = '';
-
-                    if (pageId !== '-1' && pages[pageId]?.extract) {
-                        content = pages[pageId].extract;
+                    const pageId = Object.keys(wikiData.query?.pages || {})[0];
+                    if (pageId !== '-1') {
+                         setBandInfo({ artist, content: wikiData.query.pages[pageId].extract, loading: false });
                     } else {
-                        // Fallback to Gemini
-                        const prompt = `Forneça um resumo detalhado sobre a banda "${artist}" em português com:\n\n1. **História da Banda**: Como foi formada, principais fases\n2. **Integrantes**: Membros atuais e ex-membros importantes com seus instrumentos\n3. **Álbuns Principais**: Liste 5-7 álbuns mais importantes com anos\n4. **Curiosidades**: 2-3 fatos interessantes\n\nFormate de forma clara e organizada.`;
-                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                        });
-                        const data = await res.json();
-                        content = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Não disponível';
+                        throw new Error('Wiki failed');
                     }
-
-                    setBandInfo({ artist, content, loading: false });
                 } catch (e) {
-                    console.error('Erro ao buscar info:', e);
-                    setBandInfo({ artist, content: 'Erro ao carregar informações. Tente novamente.', loading: false });
+                     setBandInfo({ artist, content: 'Informações não disponíveis offline.', loading: false });
                 }
             };
 
             const fetchLyrics = async (track) => {
                 setLoadingLyrics(true);
                 try {
-                    const prompt = `Forneça a letra completa da música "${track.title}" de "${track.artist}" em JSON com duas propriedades: "original" (letra original) e "traducao" (tradução em português). Se não souber a letra exata, forneça uma tradução aproximada baseada no tema da música.`;
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                   const prompt = `Letra da musica "${track.title}" de "${track.artist}" json {original, traducao}`;
+                   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-                    const data = await res.json();
-                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-                    const jsonMatch = text.match(/\{[\s\S]*\}/);
-                    const lyricsData = jsonMatch ? JSON.parse(jsonMatch[0]) : { original: 'Não disponível', traducao: 'Não disponível' };
-                    setLyrics(lyricsData);
-                } catch (e) {
-                    setLyrics({ original: 'Erro ao carregar', traducao: 'Erro ao carregar' });
-                } finally {
-                    setLoadingLyrics(false);
-                }
+                   });
+                   const data = await res.json();
+                   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                   const json = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
+                   setLyrics(json);
+                } catch (e) { setLyrics({ original: 'Erro', traducao: 'Erro' }); } finally { setLoadingLyrics(false); }
             };
 
+            // URL ESPECIAL PARA ANDROID/WEBVIEW
             const getYoutubeEmbed = () => {
                 if (!currentTrack?.youtubeId) return '';
-                // Parâmetros otimizados para WebView/Kodular
-                // O parametro ORIGIN é crucial no mobile para evitar bloqueio 403
-                const origin = window.location.origin === 'null' || !window.location.origin ? 'https://localhost' : window.location.origin;
-                
+                // Trick: Usar https://www.youtube.com como origin para passar na verificação
                 const params = new URLSearchParams({
-                    autoplay: '1',                  // Sempre tentar autoplay
-                    playsinline: '1',               // iOS/Android inline OBRIGATÓRIO no mobile
-                    rel: '0',
-                    modestbranding: '1',
-                    controls: '1',                  // Mostra controles (importante para WebView!)
+                    autoplay: '1',
+                    playsinline: '1', // Crucial para iOS/Android
+                    controls: '0',
                     enablejsapi: '1',
-                    fs: '1',                        // Permite fullscreen
-                    origin: origin,
-                    widgetid: '1'
+                    origin: 'https://www.youtube.com', // Fix para WebView
+                    widgetid: '1',
+                    rel: '0',
+                    showinfo: '0',
+                    iv_load_policy: '3'
                 });
-                const url = `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params.toString()}`;
-                console.log('🔗 YouTube URL:', url);
-                return url;
-            };
-
-            const handleSeek = (e) => {
-                const newTime = Number(e.target.value);
-                setCurrentTime(newTime);
-                if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                    youtubeRef.current.contentWindow.postMessage(
-                        JSON.stringify({ event: 'command', func: 'seekTo', args: [newTime, true] }),
-                        '*'
-                    );
-                }
-            };
-
-            const handleVolumeChange = (e) => {
-                const newVolume = Number(e.target.value);
-                setVolume(newVolume);
-                if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                    youtubeRef.current.contentWindow.postMessage(
-                        JSON.stringify({ event: 'command', func: 'setVolume', args: [newVolume] }),
-                        '*'
-                    );
-                }
-            };
-
-            useEffect(() => {
-                if (youtubeRef.current && youtubeRef.current.contentWindow && currentTrack) {
-                    const cmd = isPlaying ? 'playVideo' : 'pauseVideo';
-
-                    // Pequeno delay para garantir que iframe carregou
-                    setTimeout(() => {
-                        youtubeRef.current.contentWindow.postMessage(
-                            JSON.stringify({ event: 'command', func: cmd }),
-                            '*'
-                        );
-                        console.log(`🎬 Comando ${cmd} enviado (useEffect)`);
-                    }, 300);
-                }
-            }, [isPlaying, currentTrack?.youtubeId]); // Reage a mudanças no isPlaying E no youtubeId
-
-            const formatTime = (seconds) => {
-                const mins = Math.floor(seconds / 60);
-                const secs = Math.floor(seconds % 60);
-                return `${mins}:${secs.toString().padStart(2, '0')}`;
+                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params.toString()}`;
             };
 
             const themes = [
@@ -1043,13 +425,7 @@
                 { name: 'blue', color: 'bg-blue-900', bgImage: 'https://www.portaldoinferno.com.br/wp-content/uploads/2020/06/wallpaper-iron-maiden-the-final-frontier-4k-download.jpg', textColor: 'text-blue-600' },
                 { name: 'yellow', color: 'bg-yellow-500', bgImage: 'https://i.pinimg.com/1200x/f6/4b/57/f64b573b709235d4aefc07ba709fd877.jpg', textColor: 'text-yellow-500' }
             ];
-
-            const themeColors = {
-                gray: 'text-gray-500',
-                blue: 'text-blue-600',
-                yellow: 'text-yellow-500'
-            };
-
+            const themeColors = { gray: 'text-gray-500', blue: 'text-blue-600', yellow: 'text-yellow-500' };
             const groupedByArtist = musicLibrary.reduce((acc, song) => {
                 const artist = song.artist || 'Desconhecido';
                 if (!acc[artist]) acc[artist] = [];
@@ -1057,52 +433,61 @@
                 return acc;
             }, {});
 
+            // Force play manual (Resgate)
+            const manualPlay = (e) => {
+                 e.stopPropagation();
+                 if(youtubeRef.current?.contentWindow) {
+                     youtubeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*');
+                 }
+            };
+
             return (
                 <div className="min-h-screen text-white relative">
-                    {/* Background */}
                     <div className="bg-wallpaper" style={{ backgroundImage: `url(${themes.find(t => t.name === activeTheme)?.bgImage})` }}></div>
                     <div className="bg-overlay"></div>
 
-                    {/* Content */}
+                    {/* PLAYER INVISIVEL MAS VISIVEL PRO ANDROID */}
+                    {currentTrack?.youtubeId && (
+                         <div id="youtube-player-container">
+                            <iframe
+                                ref={youtubeRef}
+                                width="100%"
+                                height="100%"
+                                src={getYoutubeEmbed()}
+                                frameBorder="0"
+                                allow="autoplay; encrypted-media"
+                                allowFullScreen
+                            ></iframe>
+                        </div>
+                    )}
+
                     <div className="relative z-10 pb-32">
-                        {/* Header */}
                         <div className="p-6 flex justify-between items-center">
                             <div className="flex items-center gap-3">
                                 <Icons.Guitar width={32} className={themeColors[activeTheme]} />
-                                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Metal Mania' }}>
-                                    IRON<span className={themeColors[activeTheme]}>MUSIC</span>
-                                </h1>
+                                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Metal Mania' }}>IRON<span className={themeColors[activeTheme]}>MUSIC</span></h1>
                             </div>
                             <div className="flex gap-2">
-                                {themes.map(theme => (
-                                    <button
-                                        key={theme.name}
-                                        onClick={() => setActiveTheme(theme.name)}
-                                        className={`w-8 h-8 rounded-full ${theme.color} ${activeTheme === theme.name ? 'ring-4 ring-white' : ''}`}
-                                    >
-                                    </button>
-                                ))}
+                                {themes.map(t => <button key={t.name} onClick={() => setActiveTheme(t.name)} className={`w-8 h-8 rounded-full ${t.color} ${activeTheme === t.name ? 'ring-4 ring-white' : ''}`} />)}
                             </div>
                         </div>
+
                         <div className="flex-1 overflow-y-auto pb-36 px-4 z-10 relative">
                             {view === 'home' && (
                                 <div className="space-y-6">
                                     <div className="flex gap-2 bg-white/5 p-1 rounded-lg">
-                                        <button onClick={() => setHomeTab('all')} className={`flex-1 py-2 rounded ${homeTab === 'all' ? 'bg-white/20' : ''}`}>Todas</button>
-                                        <button onClick={() => setHomeTab('artist')} className={`flex-1 py-2 rounded ${homeTab === 'artist' ? 'bg-white/20' : ''}`}>Por Banda</button>
-                                        <button onClick={() => setHomeTab('liked')} className={`flex-1 py-2 rounded ${homeTab === 'liked' ? 'bg-white/20' : ''}`}>Curtidas</button>
+                                        {['all', 'artist', 'liked'].map(tab => (
+                                            <button key={tab} onClick={() => setHomeTab(tab)} className={`flex-1 py-2 rounded ${homeTab === tab ? 'bg-white/20' : ''}`}>
+                                                {tab === 'all' ? 'Todas' : tab === 'artist' ? 'Por Banda' : 'Curtidas'}
+                                            </button>
+                                        ))}
                                     </div>
-
+                                    
                                     {homeTab === 'all' && (
                                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                                             {musicLibrary.map((song, idx) => (
-                                                <div
-                                                    key={song.id}
-                                                    onClick={() => handlePlay(song, idx)}
-                                                    onContextMenu={(e) => handleContextMenu(e, song)}
-                                                    className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
-                                                >
-                                                    <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
+                                                <div key={song.id} onClick={() => handlePlay(song, idx)} onContextMenu={(e) => handleContextMenu(e, song)} className="music-card bg-white/5 p-3 rounded-lg cursor-pointer">
+                                                    <div className="w-full aspect-square vinyl-disc mb-2 relative">
                                                         <img src={song.artwork} className="vinyl-label" alt={song.title} />
                                                         <div className="vinyl-hole"></div>
                                                     </div>
@@ -1120,13 +505,8 @@
                                                     <h3 className="text-xl font-bold mb-4">{artist}</h3>
                                                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                                                         {songs.map((song, idx) => (
-                                                            <div
-                                                                key={song.id}
-                                                                onClick={() => handlePlay(song, idx)}
-                                                                onContextMenu={(e) => handleContextMenu(e, song)}
-                                                                className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
-                                                            >
-                                                                <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
+                                                            <div key={song.id} onClick={() => handlePlay(song, idx)} onContextMenu={(e) => handleContextMenu(e, song)} className="music-card bg-white/5 p-3 rounded-lg cursor-pointer">
+                                                                <div className="w-full aspect-square vinyl-disc mb-2 relative">
                                                                     <img src={song.artwork} className="vinyl-label" alt={song.title} />
                                                                     <div className="vinyl-hole"></div>
                                                                 </div>
@@ -1142,13 +522,8 @@
                                     {homeTab === 'liked' && (
                                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                                             {musicLibrary.filter(s => s.liked).map((song, idx) => (
-                                                <div
-                                                    key={song.id}
-                                                    onClick={() => handlePlay(song, idx)}
-                                                    onContextMenu={(e) => handleContextMenu(e, song)}
-                                                    className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
-                                                >
-                                                    <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
+                                                <div key={song.id} onClick={() => handlePlay(song, idx)} onContextMenu={(e) => handleContextMenu(e, song)} className="music-card bg-white/5 p-3 rounded-lg cursor-pointer">
+                                                    <div className="w-full aspect-square vinyl-disc mb-2 relative">
                                                         <img src={song.artwork} className="vinyl-label" alt={song.title} />
                                                         <div className="vinyl-hole"></div>
                                                     </div>
@@ -1164,57 +539,35 @@
                             {view === 'search' && (
                                 <div className="space-y-4">
                                     <div className="relative">
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar artista, álbum..."
-                                            value={searchQuery}
-                                            onChange={e => setSearchQuery(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && searchMusic()}
-                                            className="w-full bg-white/10 border border-white/20 p-4 pl-12 rounded-full outline-none"
-                                        />
+                                        <input type="text" placeholder="Buscar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && searchMusic()} className="w-full bg-white/10 border border-white/20 p-4 pl-12 rounded-full outline-none" />
                                         <Icons.Search className="absolute left-4 top-4 text-gray-400" width={20} />
                                         <button onClick={searchMusic} className="absolute right-2 top-2 bg-white/10 px-4 py-2 rounded-full">Buscar</button>
                                     </div>
-
                                     {loading && <div className="text-center py-8">Carregando...</div>}
-
                                     {selectedAlbum ? (
                                         <div className="space-y-4">
                                             <button onClick={() => setSelectedAlbum(null)} className="text-gray-400 hover:text-white">← Voltar</button>
                                             <div className="flex items-center gap-4 mb-4">
                                                 <img src={selectedAlbum.artwork} className="w-20 h-20 rounded-lg" alt={selectedAlbum.name} />
-                                                <div>
-                                                    <h2 className="text-xl font-bold">{selectedAlbum.name}</h2>
-                                                    <p className="text-gray-400">{selectedAlbum.artist}</p>
-                                                </div>
+                                                <div><h2 className="text-xl font-bold">{selectedAlbum.name}</h2><p className="text-gray-400">{selectedAlbum.artist}</p></div>
                                             </div>
-                                            {loadingTracks && <div className="text-center py-8">Carregando músicas...</div>}
-                                            {!loadingTracks && (
-                                                <div className="space-y-2">
-                                                    {albumTracks.map((track, idx) => (
-                                                        <div
-                                                            key={idx}
-                                                            onClick={() => selectTrackFromSearch(track)}
-                                                            className="bg-white/5 hover:bg-white/10 p-3 rounded-lg cursor-pointer flex items-center gap-3"
-                                                        >
-                                                            <span className="text-gray-500 w-6">{track.trackNumber}</span>
-                                                            <div className="flex-1">
-                                                                <h4 className="font-bold">{track.title}</h4>
-                                                                <p className="text-xs text-gray-400">{track.artist}</p>
-                                                            </div>
-                                                            <span className="text-xs text-gray-500">▶</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                            {loadingTracks ? <div className="text-center">Carregando músicas...</div> : 
+                                                <div className="space-y-2">{albumTracks.map((t, i) => (
+                                                    <div key={i} onClick={() => selectTrackFromSearch(t)} className="bg-white/5 hover:bg-white/10 p-3 rounded-lg cursor-pointer flex items-center gap-3">
+                                                        <span className="text-gray-500 w-6">{t.trackNumber}</span>
+                                                        <div className="flex-1"><h4 className="font-bold">{t.title}</h4><p className="text-xs text-gray-400">{t.artist}</p></div>
+                                                        <span className="text-xs text-gray-500">▶</span>
+                                                    </div>
+                                                ))}</div>
+                                            }
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                            {searchResults.map((result, i) => (
-                                                <div key={i} onClick={() => fetchAlbumTracks(result)} className="music-card bg-white/5 p-3 rounded-lg cursor-pointer">
-                                                    <img src={result.artwork} className="w-full aspect-square rounded-lg mb-2" alt={result.name} />
-                                                    <h4 className="font-bold text-sm truncate">{result.name}</h4>
-                                                    <p className="text-xs text-gray-400 truncate">{result.artist}</p>
+                                            {searchResults.map((r, i) => (
+                                                <div key={i} onClick={() => fetchAlbumTracks(r)} className="music-card bg-white/5 p-3 rounded-lg cursor-pointer">
+                                                    <img src={r.artwork} className="w-full aspect-square rounded-lg mb-2" />
+                                                    <h4 className="font-bold text-sm truncate">{r.name}</h4>
+                                                    <p className="text-xs text-gray-400 truncate">{r.artist}</p>
                                                 </div>
                                             ))}
                                         </div>
@@ -1222,17 +575,14 @@
                                 </div>
                             )}
 
-                            {view === 'chords' && currentTrack && (
+                             {view === 'chords' && currentTrack && (
                                 <div className="space-y-4">
                                     <h2 className="text-2xl font-bold mb-4">Cifras e Tablaturas</h2>
                                     <div className="bg-white/5 p-4 rounded-lg">
                                         <h3 className="font-bold mb-2">{currentTrack.title} - {currentTrack.artist}</h3>
-                                        <p className="text-sm text-gray-400 mb-4">Encontre cifras e tablaturas nos sites:</p>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                             <a href={`https://www.cifraclub.com.br/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-yellow-600 hover:bg-yellow-500 p-3 rounded-lg text-center font-bold">🎸 Cifra Club</a>
                                             <a href={`https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-orange-600 hover:bg-orange-500 p-3 rounded-lg text-center font-bold">🎸 Ultimate Guitar</a>
-                                            <a href={`https://tabs.ultimate-guitar.com/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-red-600 hover:bg-red-500 p-3 rounded-lg text-center font-bold">🎸 UG Tabs</a>
-                                            <a href={`https://www.songsterr.com/?pattern=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 p-3 rounded-lg text-center font-bold">🎸 Songsterr</a>
                                         </div>
                                     </div>
                                 </div>
@@ -1240,21 +590,12 @@
 
                             {view === 'lyrics' && currentTrack && (
                                 <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
-                                        {!lyrics && <button onClick={() => fetchLyrics(currentTrack)} className="bg-white/10 px-4 py-2 rounded-lg">Carregar Letra</button>}
-                                    </div>
-                                    {loadingLyrics && <div className="text-center py-8">Carregando letra...</div>}
+                                    <div className="flex justify-between items-center"><h2 className="text-2xl font-bold">{currentTrack.title}</h2>{!lyrics && <button onClick={() => fetchLyrics(currentTrack)} className="bg-white/10 px-4 py-2 rounded-lg">Carregar</button>}</div>
+                                    {loadingLyrics && <div className="text-center">Carregando...</div>}
                                     {lyrics && (
                                         <div className="grid md:grid-cols-2 gap-6">
-                                            <div className="bg-white/5 p-4 rounded-lg">
-                                                <h3 className="font-bold mb-3 text-yellow-500">Original</h3>
-                                                <pre className="whitespace-pre-wrap text-sm">{lyrics.original}</pre>
-                                            </div>
-                                            <div className="bg-white/5 p-4 rounded-lg">
-                                                <h3 className="font-bold mb-3 text-green-500">Tradução</h3>
-                                                <pre className="whitespace-pre-wrap text-sm">{lyrics.traducao}</pre>
-                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-lg"><h3 className="font-bold mb-3 text-yellow-500">Original</h3><pre className="whitespace-pre-wrap text-sm">{lyrics.original}</pre></div>
+                                            <div className="bg-white/5 p-4 rounded-lg"><h3 className="font-bold mb-3 text-green-500">Tradução</h3><pre className="whitespace-pre-wrap text-sm">{lyrics.traducao}</pre></div>
                                         </div>
                                     )}
                                 </div>
@@ -1268,87 +609,37 @@
                                     <button onClick={() => fetchBandInfo(currentTrack.artist)} className="bg-white/10 px-4 py-2 rounded-lg">ℹ️ Sobre</button>
                                 </div>
                                 <div className="flex-1 flex items-center justify-center relative z-10">
-                                    <div className={`w-96 h-96 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
+                                    <div className={`w-96 h-96 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} onClick={manualPlay}>
                                         <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} />
                                         <div className="vinyl-hole"></div>
+                                        {/* Botão de Resgate para Mobile - Aparece se não estiver tocando */}
+                                        {!isPlaying && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-50 cursor-pointer rounded-full">
+                                                <Icons.Play width={64} className="text-white opacity-80" />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="p-8 space-y-4 relative z-10">
-                                    <div>
-                                        <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
-                                        <p className={`text-lg ${themeColors[activeTheme]}`}>{currentTrack.artist}</p>
-                                    </div>
-
-                                    {/* Progress Bar */}
+                                    <div><h2 className="text-2xl font-bold">{currentTrack.title}</h2><p className={`text-lg ${themeColors[activeTheme]}`}>{currentTrack.artist}</p></div>
                                     <div className="space-y-2">
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max={duration || 100}
-                                            value={currentTime}
-                                            onChange={handleSeek}
-                                            className="w-full"
-                                            style={{
-                                                background: `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.2) ${(currentTime / duration) * 100}%)`
-                                            }}
-                                        />
-                                        <div className="flex justify-between text-xs text-gray-400">
-                                            <span>{formatTime(currentTime)}</span>
-                                            <span>{formatTime(duration)}</span>
-                                        </div>
+                                        <input type="range" min="0" max={duration || 100} value={currentTime} onChange={(e) => {
+                                            const t = Number(e.target.value); setCurrentTime(t);
+                                            youtubeRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [t, true] }), '*');
+                                        }} className="w-full" style={{ background: `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.2) ${(currentTime / duration) * 100}%)` }} />
+                                        <div className="flex justify-between text-xs text-gray-400"><span>{Math.floor(currentTime/60)}:{Math.floor(currentTime%60).toString().padStart(2,'0')}</span><span>{Math.floor(duration/60)}:{Math.floor(duration%60).toString().padStart(2,'0')}</span></div>
                                     </div>
-
-                                    {/* Controls */}
                                     <div className="flex justify-center gap-6 items-center">
-                                        <button onClick={playPrevious} className="text-white/70 hover:text-white">
-                                            <Icons.SkipBack width={32} />
+                                        <button onClick={playPrevious}><Icons.SkipBack width={32} /></button>
+                                        <button onClick={() => {
+                                            if(isPlaying) youtubeRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*');
+                                            else youtubeRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*');
+                                        }} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center">
+                                            {isBuffering ? <span className="animate-spin text-xl">↻</span> : (isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} />)}
                                         </button>
-                                        <button onClick={() => setIsPlaying(!isPlaying)} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center">
-                                            {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} />}
-                                        </button>
-                                        <button onClick={playNext} className="text-white/70 hover:text-white">
-                                            <Icons.Skip width={32} />
-                                        </button>
-                                    </div>
-
-                                    {/* Volume */}
-                                    <div className="flex items-center gap-3">
-                                        <Icons.Volume width={20} />
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max="100"
-                                            value={volume}
-                                            onChange={handleVolumeChange}
-                                            className="flex-1"
-                                            style={{
-                                                background: `linear-gradient(to right, white ${volume}%, rgba(255,255,255,0.2) ${volume}%)`
-                                            }}
-                                        />
-                                        <span className="text-xs w-8">{volume}%</span>
+                                        <button onClick={playNext}><Icons.Skip width={32} /></button>
                                     </div>
                                 </div>
-                                {currentTrack.youtubeId && (
-                                    <iframe
-                                        key={currentTrack.youtubeId}
-                                        ref={youtubeRef}
-                                        style={{
-                                            position: 'fixed',
-                                            bottom: '80px',
-                                            right: '10px',
-                                            width: '1px',
-                                            height: '1px',
-                                            opacity: '0.01',
-                                            pointerEvents: 'none',
-                                            zIndex: 999
-                                        }}
-                                        src={getYoutubeEmbed()}
-                                        allow="accelerometer; autoplay *; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen *"
-                                        allowFullScreen
-                                        playsInline
-                                        title="YouTube Player"
-                                    />
-                                )}
                             </div>
                         )}
 
@@ -1365,87 +656,40 @@
                             {currentTrack && !showFullScreenPlayer && (
                                 <div onClick={() => setShowFullScreenPlayer(true)} className="mb-2 glass-nav rounded-lg p-2 flex items-center justify-between cursor-pointer">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
-                                            <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} style={{ width: '45%', height: '45%' }} />
+                                        <div className={`w-10 h-10 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`}>
+                                            <img src={currentTrack.artwork} className="vinyl-label" style={{ width: '45%', height: '45%' }} />
                                             <div className="vinyl-hole" style={{ width: '15%', height: '15%' }}></div>
                                         </div>
-                                        <div>
-                                            <p className="text-sm font-bold truncate">{currentTrack.title}</p>
-                                            <p className="text-xs text-green-400 truncate">{currentTrack.artist}</p>
-                                        </div>
+                                        <div><p className="text-sm font-bold truncate">{currentTrack.title}</p><p className="text-xs text-green-400 truncate">{currentTrack.artist}</p></div>
                                     </div>
-                                    <button onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}>
+                                    <button onClick={(e) => {
+                                        e.stopPropagation();
+                                        if(isPlaying) youtubeRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*');
+                                        else youtubeRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*');
+                                    }}>
                                         {isPlaying ? <Icons.Pause width={20} /> : <Icons.Play width={20} />}
                                     </button>
                                 </div>
                             )}
 
                             <div className="glass-nav rounded-2xl h-16 flex items-center justify-around px-2">
-                                <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 w-16 ${view === 'home' ? 'text-white' : 'text-gray-500'}`}>
-                                    <Icons.Home width={24} />
-                                    <span className="text-[10px]">Início</span>
-                                </button>
-                                <button onClick={() => setView('search')} className={`flex flex-col items-center gap-1 w-16 ${view === 'search' ? 'text-white' : 'text-gray-500'}`}>
-                                    <Icons.Search width={24} />
-                                    <span className="text-[10px]">Buscar</span>
-                                </button>
-                                <button onClick={() => setView('chords')} className={`flex flex-col items-center gap-1 w-16 ${view === 'chords' ? 'text-white' : 'text-gray-500'}`}>
-                                    <Icons.Guitar width={24} />
-                                    <span className="text-[10px]">Cifra</span>
-                                </button>
-                                <button onClick={() => setView('lyrics')} className={`flex flex-col items-center gap-1 w-16 ${view === 'lyrics' ? 'text-white' : 'text-gray-500'}`}>
-                                    <Icons.ABC width={24} />
-                                    <span className="text-[10px]">Letra</span>
-                                </button>
+                                <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 w-16 ${view === 'home' ? 'text-white' : 'text-gray-500'}`}><Icons.Home width={24} /><span className="text-[10px]">Início</span></button>
+                                <button onClick={() => setView('search')} className={`flex flex-col items-center gap-1 w-16 ${view === 'search' ? 'text-white' : 'text-gray-500'}`}><Icons.Search width={24} /><span className="text-[10px]">Buscar</span></button>
+                                <button onClick={() => setView('chords')} className={`flex flex-col items-center gap-1 w-16 ${view === 'chords' ? 'text-white' : 'text-gray-500'}`}><Icons.Guitar width={24} /><span className="text-[10px]">Cifra</span></button>
+                                <button onClick={() => setView('lyrics')} className={`flex flex-col items-center gap-1 w-16 ${view === 'lyrics' ? 'text-white' : 'text-gray-500'}`}><Icons.ABC width={24} /><span className="text-[10px]">Letra</span></button>
                             </div>
                         </div>
 
-                        {/* 🐛 DEBUG CONSOLE - MONITOR FIREBASE */}
-                        {showDebugConsole && debugLogs.length > 0 && (
-                            <div className="debug-console">
-                                <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/20">
-                                    <span className="text-white font-bold text-xs">🐛 Firebase Monitor</span>
-                                    <button onClick={() => setShowDebugConsole(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
-                                </div>
-                                <div className="space-y-1">
-                                    {debugLogs.map((log, idx) => (
-                                        <div key={idx} className={`text-[9px] ${log.type === 'success' ? 'text-green-400' :
-                                            log.type === 'error' ? 'text-red-400' :
-                                                log.type === 'warn' ? 'text-yellow-400' :
-                                                    'text-gray-300'
-                                            }`}>
-                                            {log.msg}
-                                        </div>
-                                    ))}
-                                </div>
+                        {contextMenu && (
+                            <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
+                                <div className="context-menu-item" onClick={() => handlePlay(contextMenu.track)}>▶️ Tocar</div>
+                                <div className="context-menu-item danger" onClick={() => deleteTrack(contextMenu.track)}>🗑️ Excluir</div>
                             </div>
                         )}
-                        {!showDebugConsole && (
-                            <button
-                                onClick={() => setShowDebugConsole(true)}
-                                className="fixed bottom-24 right-4 bg-white/10 hover:bg-white/20 p-2 rounded-full text-xs z-150 border border-white/20"
-                                title="Mostrar Firebase Monitor"
-                            >
-                                🐛
-                            </button>
-                        )}
+                        
+                        {showDebugConsole && <div className="debug-console"><button onClick={() => setShowDebugConsole(false)}>X</button>{debugLogs.map((l,i) => <div key={i} className="text-xs">{l.msg}</div>)}</div>}
+                         {!showDebugConsole && <button onClick={() => setShowDebugConsole(true)} className="fixed bottom-24 right-4 bg-white/10 p-2 rounded-full text-xs">🐛</button>}
                     </div>
-
-                    {/* Context Menu */}
-                    {contextMenu && (
-                        <div
-                            className="context-menu"
-                            style={{ top: contextMenu.y, left: contextMenu.x }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="context-menu-item" onClick={() => handlePlay(contextMenu.track)}>
-                                ▶️ Tocar
-                            </div>
-                            <div className="context-menu-item danger" onClick={() => deleteTrack(contextMenu.track)}>
-                                🗑️ Excluir
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         }
@@ -1454,5 +698,4 @@
         root.render(<App />);
     </script>
 </body>
-
 </html>
