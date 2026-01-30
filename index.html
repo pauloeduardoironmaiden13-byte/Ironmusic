@@ -386,8 +386,10 @@
             const handlePlay = (track, index = 0) => {
                 setCurrentTrack(track);
                 setCurrentIndex(index);
-                setShowFullScreenPlayer(true);
                 setIsPlaying(true);
+                setShowFullScreenPlayer(false);
+                setCurrentTime(0);
+                setDuration(0);
             };
 
             const playNext = () => {
@@ -448,19 +450,51 @@
                 if (!searchQuery) return;
                 setLoading(true);
                 setSelectedAlbum(null);
+                setAutocompleteResults([]); // Clear autocomplete results
                 try {
-                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=album&limit=20`);
-                    const data = await res.json();
-                    if (data.results) {
-                        setSearchResults(data.results.map(r => ({
-                            name: r.collectionName,
-                            artist: r.artistName,
-                            artwork: r.artworkUrl100.replace('100x100', '600x600'),
-                            collectionId: r.collectionId
-                        })));
+                    // Search for both songs and albums
+                    const [songRes, albumRes] = await Promise.all([
+                        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=song&limit=10`),
+                        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=album&limit=10`)
+                    ]);
+
+                    const [songData, albumData] = await Promise.all([songRes.json(), albumRes.json()]);
+
+                    // Combine and deduplicate results
+                    const albums = new Map();
+
+                    // Add albums from album search
+                    if (albumData.results) {
+                        albumData.results.forEach(r => {
+                            if (r.collectionId) {
+                                albums.set(r.collectionId, {
+                                    name: r.collectionName,
+                                    artist: r.artistName,
+                                    artwork: (r.artworkUrl100 || '').replace('100x100', '600x600'),
+                                    collectionId: r.collectionId
+                                });
+                            }
+                        });
                     }
+
+                    // Add albums from song search
+                    if (songData.results) {
+                        songData.results.forEach(r => {
+                            if (r.collectionId && !albums.has(r.collectionId)) {
+                                albums.set(r.collectionId, {
+                                    name: r.collectionName,
+                                    artist: r.artistName,
+                                    artwork: (r.artworkUrl100 || '').replace('100x100', '600x600'),
+                                    collectionId: r.collectionId
+                                });
+                            }
+                        });
+                    }
+
+                    setSearchResults(Array.from(albums.values()));
                 } catch (e) {
-                    console.error(e);
+                    console.error('Search error:', e);
+                    setSearchResults([]);
                 } finally {
                     setLoading(false);
                 }
@@ -473,47 +507,114 @@
                     const res = await fetch(`https://itunes.apple.com/lookup?id=${album.collectionId}&entity=song`);
                     const data = await res.json();
                     if (data.results && data.results.length > 1) {
-                        const tracks = data.results.slice(1).map(track => ({
-                            name: track.trackName,
-                            artist: track.artistName,
-                            artwork: album.artwork,
-                            trackNumber: track.trackNumber
-                        }));
+                        const tracks = data.results.slice(1).map((track, idx) => ({
+                            id: `${album.collectionId}-${track.trackId || idx}`,
+                            title: track.trackName || `Track ${idx + 1}`,
+                            artist: track.artistName || album.artist,
+                            artwork: (track.artworkUrl100 || album.artwork).replace('100x100', '600x600'),
+                            trackNumber: track.trackNumber || idx + 1
+                        })).filter(t => t.title); // Remove tracks without title
                         setAlbumTracks(tracks);
+                    } else {
+                        setAlbumTracks([]);
                     }
                 } catch (e) {
-                    console.error(e);
+                    console.error('Error fetching tracks:', e);
+                    setAlbumTracks([]);
                 } finally {
                     setLoadingTracks(false);
                 }
             };
 
-            const selectTrack = async (track) => {
+            const selectTrackFromSearch = async (track) => {
+                setLoadingTracks(true);
                 try {
-                    const searchQuery = `${track.artist} ${track.name} official audio`;
-                    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${YOUTUBE_API_KEY}&type=video&videoEmbeddable=true&maxResults=1`);
-                    const data = await res.json();
-
-                    if (data.items && data.items.length > 0) {
-                        const youtubeId = data.items[0].id.videoId;
-                        const newTrack = { ...track, youtubeId };
-
-                        if (db) {
-                            const cacheKey = `ironmusic_${track.name}_${track.artist}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                            await db.collection('song_cache').doc(cacheKey).set({
-                                title: track.name,
-                                artist: track.artist,
-                                youtubeId: youtubeId,
-                                artwork: track.artwork,
-                                createdAt: new Date()
-                            });
+                    // Check if already in cache
+                    let cachedTrack = null;
+                    if (db) {
+                        const snapshot = await db.collection('song_cache')
+                            .where('title', '==', track.title)
+                            .where('artist', '==', track.artist)
+                            .get();
+                        if (!snapshot.empty) {
+                            cachedTrack = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
                         }
+                    }
 
-                        loadMusicLibrary();
-                        handlePlay(newTrack);
+                    if (cachedTrack && cachedTrack.youtubeId) {
+                        // Use cached track
+                        setCurrentTrack(cachedTrack);
+                        setCurrentIndex(0);
+                        setIsPlaying(true);
+                        setShowFullScreenPlayer(false);
+                        setView('home');
+                    } else {
+                        // Fetch YouTube ID
+                        const query = `${track.artist} ${track.title} official audio`;
+                        const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&key=${YOUTUBE_API_KEY}`);
+                        const ytData = await ytRes.json();
+
+                        if (ytData.items && ytData.items.length > 0) {
+                            const youtubeId = ytData.items[0].id.videoId;
+                            const newTrack = {
+                                ...track,
+                                youtubeId,
+                                liked: false,
+                                addedAt: new Date().toISOString()
+                            };
+
+                            // Save to Firebase
+                            if (db) {
+                                const docRef = await db.collection('song_cache').add(newTrack);
+                                newTrack.id = docRef.id;
+                            }
+
+                            setCurrentTrack(newTrack);
+                            setCurrentIndex(0);
+                            setIsPlaying(true);
+                            setShowFullScreenPlayer(false);
+                            setView('home');
+                            loadMusicLibrary();
+                        } else {
+                            alert('Música não encontrada no YouTube');
+                        }
                     }
                 } catch (e) {
-                    console.error(e);
+                    console.error('Error selecting track:', e);
+                    alert('Erro ao carregar música');
+                } finally {
+                    setLoadingTracks(false);
+                }
+            };
+
+            const fetchAutocompleteResults = async (query) => {
+                if (query.length < 3) {
+                    setAutocompleteResults([]);
+                    return;
+                }
+                try {
+                    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=5`);
+                    const data = await res.json();
+                    if (data.results) {
+                        const uniqueResults = [];
+                        const seen = new Set();
+                        data.results.forEach(r => {
+                            const key = `${r.artistName}-${r.trackName}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                uniqueResults.push({
+                                    title: r.trackName,
+                                    artist: r.artistName,
+                                    artwork: (r.artworkUrl100 || '').replace('100x100', '600x600'),
+                                    collectionId: r.collectionId
+                                });
+                            }
+                        });
+                        setAutocompleteResults(uniqueResults);
+                    }
+                } catch (e) {
+                    console.error('Autocomplete error:', e);
+                    setAutocompleteResults([]);
                 }
             };
 
@@ -614,14 +715,14 @@
             };
 
             const themes = [
-                { name: 'gray', color: 'bg-gray-400', bgImage: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1920' },
-                { name: 'blue', color: 'bg-blue-500', bgImage: 'https://i.pinimg.com/originals/85/88/f4/8588f4a8f0c3c1d8aa65e5e8c80a8c7d.jpg' },
-                { name: 'yellow', color: 'bg-yellow-500', bgImage: 'https://i.pinimg.com/originals/2c/88/65/2c88651c1c02b9f1e16e6b373e9b0c6a.jpg' }
+                { name: 'gray', color: 'bg-gray-700', bgImage: 'https://wallpapercave.com/wp/ZA2hmZU.jpg', textColor: 'text-gray-500' },
+                { name: 'blue', color: 'bg-blue-900', bgImage: 'https://www.portaldoinferno.com.br/wp-content/uploads/2020/06/wallpaper-iron-maiden-the-final-frontier-4k-download.jpg', textColor: 'text-blue-600' },
+                { name: 'yellow', color: 'bg-yellow-500', bgImage: 'https://i.pinimg.com/1200x/f6/4b/57/f64b573b709235d4aefc07ba709fd877.jpg', textColor: 'text-yellow-500' }
             ];
 
             const themeColors = {
-                gray: 'text-gray-400',
-                blue: 'text-blue-500',
+                gray: 'text-gray-500',
+                blue: 'text-blue-600',
                 yellow: 'text-yellow-500'
             };
 
@@ -633,320 +734,328 @@
             }, {});
 
             return (
-                <div className="h-screen w-full flex flex-col relative">
-                    <div className={`bg-wallpaper bg-${activeTheme}`}></div>
+                <div className="min-h-screen text-white relative">
+                    {/* Background */}
+                    <div className="bg-wallpaper" style={{ backgroundImage: `url(${themes.find(t => t.name === activeTheme)?.bgImage})` }}></div>
                     <div className="bg-overlay"></div>
 
-                    <div className="flex justify-between items-center p-4 pt-8 z-10 relative">
-                        <div className="flex items-center gap-3">
-                            <i className="fas fa-guitar text-3xl text-yellow-500"></i>
-                            <h1 className="text-3xl rock-font tracking-wider">
-                                IRON<span className={themeColors[activeTheme]}>MUSIC</span>
-                            </h1>
+                    {/* Content */}
+                    <div className="relative z-10 pb-32">
+                        {/* Header */}
+                        <div className="p-6 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <Icons.Guitar width={32} className={themeColors[activeTheme]} />
+                                <h1 className="text-3xl font-bold" style={{ fontFamily: 'Metal Mania' }}>
+                                    IRON<span className={themeColors[activeTheme]}>MUSIC</span>
+                                </h1>
+                            </div>
+                            <div className="flex gap-2">
+                                {themes.map(theme => (
+                                    <button
+                                        key={theme.name}
+                                        onClick={() => setActiveTheme(theme.name)}
+                                        className={`w-8 h-8 rounded-full ${theme.color} ${activeTheme === theme.name ? 'ring-4 ring-white' : ''}`}
+                                    >
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            {['yellow', 'purple', 'green'].map(c => (
-                                <button
-                                    key={c}
-                                    onClick={() => setActiveTheme(c)}
-                                    className={`w-6 h-6 rounded-full bg-${c}-600 border-2 ${activeTheme === c ? 'border-white' : 'border-transparent'}`}
-                                />
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto pb-36 px-4 z-10 relative">
-                        {view === 'home' && (
-                            <div className="space-y-6">
-                                <div className="flex gap-2 bg-white/5 p-1 rounded-lg">
-                                    <button onClick={() => setHomeTab('all')} className={`flex-1 py-2 rounded ${homeTab === 'all' ? 'bg-white/20' : ''}`}>Todas</button>
-                                    <button onClick={() => setHomeTab('artist')} className={`flex-1 py-2 rounded ${homeTab === 'artist' ? 'bg-white/20' : ''}`}>Por Banda</button>
-                                    <button onClick={() => setHomeTab('liked')} className={`flex-1 py-2 rounded ${homeTab === 'liked' ? 'bg-white/20' : ''}`}>Curtidas</button>
-                                </div>
-
-                                {homeTab === 'all' && (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                        {musicLibrary.map((song, idx) => (
-                                            <div
-                                                key={song.id}
-                                                onClick={() => handlePlay(song, idx)}
-                                                onContextMenu={(e) => handleContextMenu(e, song)}
-                                                className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
-                                            >
-                                                <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
-                                                    <img src={song.artwork} className="vinyl-label" alt={song.title} />
-                                                    <div className="vinyl-hole"></div>
-                                                </div>
-                                                <h4 className="font-bold text-sm truncate">{song.title}</h4>
-                                                <p className="text-xs text-gray-400 truncate">{song.artist}</p>
-                                            </div>
-                                        ))}
+                        <div className="flex-1 overflow-y-auto pb-36 px-4 z-10 relative">
+                            {view === 'home' && (
+                                <div className="space-y-6">
+                                    <div className="flex gap-2 bg-white/5 p-1 rounded-lg">
+                                        <button onClick={() => setHomeTab('all')} className={`flex-1 py-2 rounded ${homeTab === 'all' ? 'bg-white/20' : ''}`}>Todas</button>
+                                        <button onClick={() => setHomeTab('artist')} className={`flex-1 py-2 rounded ${homeTab === 'artist' ? 'bg-white/20' : ''}`}>Por Banda</button>
+                                        <button onClick={() => setHomeTab('liked')} className={`flex-1 py-2 rounded ${homeTab === 'liked' ? 'bg-white/20' : ''}`}>Curtidas</button>
                                     </div>
-                                )}
 
-                                {homeTab === 'artist' && (
-                                    <div className="space-y-8">
-                                        {Object.entries(groupedByArtist).map(([artist, songs]) => (
-                                            <div key={artist}>
-                                                <h3 className="text-xl font-bold mb-4">{artist}</h3>
-                                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                                    {songs.map((song, idx) => (
-                                                        <div
-                                                            key={song.id}
-                                                            onClick={() => handlePlay(song, idx)}
-                                                            onContextMenu={(e) => handleContextMenu(e, song)}
-                                                            className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
-                                                        >
-                                                            <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
-                                                                <img src={song.artwork} className="vinyl-label" alt={song.title} />
-                                                                <div className="vinyl-hole"></div>
+                                    {homeTab === 'all' && (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                            {musicLibrary.map((song, idx) => (
+                                                <div
+                                                    key={song.id}
+                                                    onClick={() => handlePlay(song, idx)}
+                                                    onContextMenu={(e) => handleContextMenu(e, song)}
+                                                    className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
+                                                >
+                                                    <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
+                                                        <img src={song.artwork} className="vinyl-label" alt={song.title} />
+                                                        <div className="vinyl-hole"></div>
+                                                    </div>
+                                                    <h4 className="font-bold text-sm truncate">{song.title}</h4>
+                                                    <p className="text-xs text-gray-400 truncate">{song.artist}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {homeTab === 'artist' && (
+                                        <div className="space-y-8">
+                                            {Object.entries(groupedByArtist).map(([artist, songs]) => (
+                                                <div key={artist}>
+                                                    <h3 className="text-xl font-bold mb-4">{artist}</h3>
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                                        {songs.map((song, idx) => (
+                                                            <div
+                                                                key={song.id}
+                                                                onClick={() => handlePlay(song, idx)}
+                                                                onContextMenu={(e) => handleContextMenu(e, song)}
+                                                                className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
+                                                            >
+                                                                <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
+                                                                    <img src={song.artwork} className="vinyl-label" alt={song.title} />
+                                                                    <div className="vinyl-hole"></div>
+                                                                </div>
+                                                                <h4 className="font-bold text-sm truncate">{song.title}</h4>
                                                             </div>
-                                                            <h4 className="font-bold text-sm truncate">{song.title}</h4>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {homeTab === 'liked' && (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                            {musicLibrary.filter(s => s.liked).map((song, idx) => (
+                                                <div
+                                                    key={song.id}
+                                                    onClick={() => handlePlay(song, idx)}
+                                                    onContextMenu={(e) => handleContextMenu(e, song)}
+                                                    className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
+                                                >
+                                                    <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
+                                                        <img src={song.artwork} className="vinyl-label" alt={song.title} />
+                                                        <div className="vinyl-hole"></div>
+                                                    </div>
+                                                    <h4 className="font-bold text-sm truncate">{song.title}</h4>
+                                                    <p className="text-xs text-gray-400 truncate">{song.artist}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {view === 'search' && (
+                                <div className="space-y-4">
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar artista, álbum..."
+                                            value={searchQuery}
+                                            onChange={e => setSearchQuery(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && searchMusic()}
+                                            className="w-full bg-white/10 border border-white/20 p-4 pl-12 rounded-full outline-none"
+                                        />
+                                        <Icons.Search className="absolute left-4 top-4 text-gray-400" width={20} />
+                                        <button onClick={searchMusic} className="absolute right-2 top-2 bg-white/10 px-4 py-2 rounded-full">Buscar</button>
+                                    </div>
+
+                                    {loading && <div className="text-center py-8">Carregando...</div>}
+
+                                    {selectedAlbum ? (
+                                        <div className="space-y-4">
+                                            <button onClick={() => setSelectedAlbum(null)} className="text-gray-400 hover:text-white">← Voltar</button>
+                                            <div className="flex items-center gap-4 mb-4">
+                                                <img src={selectedAlbum.artwork} className="w-20 h-20 rounded-lg" alt={selectedAlbum.name} />
+                                                <div>
+                                                    <h2 className="text-xl font-bold">{selectedAlbum.name}</h2>
+                                                    <p className="text-gray-400">{selectedAlbum.artist}</p>
+                                                </div>
+                                            </div>
+                                            {loadingTracks && <div className="text-center py-8">Carregando músicas...</div>}
+                                            {!loadingTracks && (
+                                                <div className="space-y-2">
+                                                    {albumTracks.map((track, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => selectTrack(track)}
+                                                            className="bg-white/5 hover:bg-white/10 p-3 rounded-lg cursor-pointer flex items-center gap-3"
+                                                        >
+                                                            <span className="text-gray-500 w-6">{track.trackNumber}</span>
+                                                            <div className="flex-1">
+                                                                <h4 className="font-bold">{track.name}</h4>
+                                                                <p className="text-xs text-gray-400">{track.artist}</p>
+                                                            </div>
+                                                            <span className="text-xs text-gray-500">▶</span>
                                                         </div>
                                                     ))}
                                                 </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {homeTab === 'liked' && (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                        {musicLibrary.filter(s => s.liked).map((song, idx) => (
-                                            <div
-                                                key={song.id}
-                                                onClick={() => handlePlay(song, idx)}
-                                                onContextMenu={(e) => handleContextMenu(e, song)}
-                                                className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
-                                            >
-                                                <img src={song.artwork} className="w-full aspect-square vinyl-disc mb-2 object-cover" alt={song.title} />
-                                                <h4 className="font-bold text-sm truncate">{song.title}</h4>
-                                                <p className="text-xs text-gray-400 truncate">{song.artist}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {view === 'search' && (
-                            <div className="space-y-4">
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar artista, álbum..."
-                                        value={searchQuery}
-                                        onChange={e => setSearchQuery(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && searchMusic()}
-                                        className="w-full bg-white/10 border border-white/20 p-4 pl-12 rounded-full outline-none"
-                                    />
-                                    <Icons.Search className="absolute left-4 top-4 text-gray-400" width={20} />
-                                    <button onClick={searchMusic} className="absolute right-2 top-2 bg-white/10 px-4 py-2 rounded-full">Buscar</button>
-                                </div>
-
-                                {loading && <div className="text-center py-8">Carregando...</div>}
-
-                                {selectedAlbum ? (
-                                    <div className="space-y-4">
-                                        <button onClick={() => setSelectedAlbum(null)} className="text-gray-400 hover:text-white">← Voltar</button>
-                                        <div className="flex items-center gap-4 mb-4">
-                                            <img src={selectedAlbum.artwork} className="w-20 h-20 rounded-lg" alt={selectedAlbum.name} />
-                                            <div>
-                                                <h2 className="text-xl font-bold">{selectedAlbum.name}</h2>
-                                                <p className="text-gray-400">{selectedAlbum.artist}</p>
-                                            </div>
+                                            )}
                                         </div>
-                                        {loadingTracks && <div className="text-center py-8">Carregando músicas...</div>}
-                                        {!loadingTracks && (
-                                            <div className="space-y-2">
-                                                {albumTracks.map((track, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => selectTrack(track)}
-                                                        className="bg-white/5 hover:bg-white/10 p-3 rounded-lg cursor-pointer flex items-center gap-3"
-                                                    >
-                                                        <span className="text-gray-500 w-6">{track.trackNumber}</span>
-                                                        <div className="flex-1">
-                                                            <h4 className="font-bold">{track.name}</h4>
-                                                            <p className="text-xs text-gray-400">{track.artist}</p>
-                                                        </div>
-                                                        <span className="text-xs text-gray-500">▶</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                                        {searchResults.map((result, i) => (
-                                            <div key={i} onClick={() => fetchAlbumTracks(result)} className="music-card bg-white/5 p-3 rounded-lg cursor-pointer">
-                                                <img src={result.artwork} className="w-full aspect-square rounded-lg mb-2" alt={result.name} />
-                                                <h4 className="font-bold text-sm truncate">{result.name}</h4>
-                                                <p className="text-xs text-gray-400 truncate">{result.artist}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {view === 'chords' && currentTrack && (
-                            <div className="space-y-4">
-                                <h2 className="text-2xl font-bold mb-4">Cifras e Tablaturas</h2>
-                                <div className="bg-white/5 p-4 rounded-lg">
-                                    <h3 className="font-bold mb-2">{currentTrack.title} - {currentTrack.artist}</h3>
-                                    <p className="text-sm text-gray-400 mb-4">Encontre cifras e tablaturas nos sites:</p>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <a href={`https://www.cifraclub.com.br/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-yellow-600 hover:bg-yellow-500 p-3 rounded-lg text-center font-bold">🎸 Cifra Club</a>
-                                        <a href={`https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-orange-600 hover:bg-orange-500 p-3 rounded-lg text-center font-bold">🎸 Ultimate Guitar</a>
-                                        <a href={`https://tabs.ultimate-guitar.com/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-red-600 hover:bg-red-500 p-3 rounded-lg text-center font-bold">🎸 UG Tabs</a>
-                                        <a href={`https://www.songsterr.com/?pattern=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 p-3 rounded-lg text-center font-bold">🎸 Songsterr</a>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {view === 'lyrics' && currentTrack && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
-                                    {!lyrics && <button onClick={() => fetchLyrics(currentTrack)} className="bg-white/10 px-4 py-2 rounded-lg">Carregar Letra</button>}
-                                </div>
-                                {loadingLyrics && <div className="text-center py-8">Carregando letra...</div>}
-                                {lyrics && (
-                                    <div className="grid md:grid-cols-2 gap-6">
-                                        <div className="bg-white/5 p-4 rounded-lg">
-                                            <h3 className="font-bold mb-3 text-yellow-500">Original</h3>
-                                            <pre className="whitespace-pre-wrap text-sm">{lyrics.original}</pre>
+                                    ) : (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                            {searchResults.map((result, i) => (
+                                                <div key={i} onClick={() => fetchAlbumTracks(result)} className="music-card bg-white/5 p-3 rounded-lg cursor-pointer">
+                                                    <img src={result.artwork} className="w-full aspect-square rounded-lg mb-2" alt={result.name} />
+                                                    <h4 className="font-bold text-sm truncate">{result.name}</h4>
+                                                    <p className="text-xs text-gray-400 truncate">{result.artist}</p>
+                                                </div>
+                                            ))}
                                         </div>
-                                        <div className="bg-white/5 p-4 rounded-lg">
-                                            <h3 className="font-bold mb-3 text-green-500">Tradução</h3>
-                                            <pre className="whitespace-pre-wrap text-sm">{lyrics.traducao}</pre>
+                                    )}
+                                </div>
+                            )}
+
+                            {view === 'chords' && currentTrack && (
+                                <div className="space-y-4">
+                                    <h2 className="text-2xl font-bold mb-4">Cifras e Tablaturas</h2>
+                                    <div className="bg-white/5 p-4 rounded-lg">
+                                        <h3 className="font-bold mb-2">{currentTrack.title} - {currentTrack.artist}</h3>
+                                        <p className="text-sm text-gray-400 mb-4">Encontre cifras e tablaturas nos sites:</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <a href={`https://www.cifraclub.com.br/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-yellow-600 hover:bg-yellow-500 p-3 rounded-lg text-center font-bold">🎸 Cifra Club</a>
+                                            <a href={`https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-orange-600 hover:bg-orange-500 p-3 rounded-lg text-center font-bold">🎸 Ultimate Guitar</a>
+                                            <a href={`https://tabs.ultimate-guitar.com/?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`} target="_blank" className="bg-red-600 hover:bg-red-500 p-3 rounded-lg text-center font-bold">🎸 UG Tabs</a>
+                                            <a href={`https://www.songsterr.com/?pattern=${encodeURIComponent(currentTrack.title)}`} target="_blank" className="bg-purple-600 hover:bg-purple-500 p-3 rounded-lg text-center font-bold">🎸 Songsterr</a>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {showFullScreenPlayer && currentTrack && (
-                        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex flex-col">
-                            <div className="p-6 flex justify-between relative z-10">
-                                <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
-                                <button onClick={() => fetchBandInfo(currentTrack.artist)} className="bg-white/10 px-4 py-2 rounded-lg">ℹ️ Sobre</button>
-                            </div>
-                            <div className="flex-1 flex items-center justify-center relative z-10">
-                                <div className={`w-96 h-96 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
-                                    <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} />
-                                    <div className="vinyl-hole"></div>
                                 </div>
-                            </div>
-                            <div className="p-8 space-y-4 relative z-10">
-                                <div>
-                                    <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
-                                    <p className={`text-lg ${themeColors[activeTheme]}`}>{currentTrack.artist}</p>
-                                </div>
+                            )}
 
-                                {/* Progress Bar */}
-                                <div className="space-y-2">
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max={duration || 100}
-                                        value={currentTime}
-                                        onChange={handleSeek}
-                                        className="w-full"
-                                        style={{
-                                            background: `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.2) ${(currentTime / duration) * 100}%)`
-                                        }}
-                                    />
-                                    <div className="flex justify-between text-xs text-gray-400">
-                                        <span>{formatTime(currentTime)}</span>
-                                        <span>{formatTime(duration)}</span>
+                            {view === 'lyrics' && currentTrack && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
+                                        {!lyrics && <button onClick={() => fetchLyrics(currentTrack)} className="bg-white/10 px-4 py-2 rounded-lg">Carregar Letra</button>}
                                     </div>
+                                    {loadingLyrics && <div className="text-center py-8">Carregando letra...</div>}
+                                    {lyrics && (
+                                        <div className="grid md:grid-cols-2 gap-6">
+                                            <div className="bg-white/5 p-4 rounded-lg">
+                                                <h3 className="font-bold mb-3 text-yellow-500">Original</h3>
+                                                <pre className="whitespace-pre-wrap text-sm">{lyrics.original}</pre>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-lg">
+                                                <h3 className="font-bold mb-3 text-green-500">Tradução</h3>
+                                                <pre className="whitespace-pre-wrap text-sm">{lyrics.traducao}</pre>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Controls */}
-                                <div className="flex justify-center gap-6 items-center">
-                                    <button onClick={playPrevious} className="text-white/70 hover:text-white">
-                                        <Icons.SkipBack width={32} />
-                                    </button>
-                                    <button onClick={() => setIsPlaying(!isPlaying)} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center">
-                                        {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} />}
-                                    </button>
-                                    <button onClick={playNext} className="text-white/70 hover:text-white">
-                                        <Icons.Skip width={32} />
-                                    </button>
-                                </div>
-
-                                {/* Volume */}
-                                <div className="flex items-center gap-3">
-                                    <Icons.Volume width={20} />
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        value={volume}
-                                        onChange={handleVolumeChange}
-                                        className="flex-1"
-                                        style={{
-                                            background: `linear-gradient(to right, white ${volume}%, rgba(255,255,255,0.2) ${volume}%)`
-                                        }}
-                                    />
-                                    <span className="text-xs w-8">{volume}%</span>
-                                </div>
-                            </div>
-                            {currentTrack.youtubeId && (
-                                <iframe ref={youtubeRef} className="hidden" src={getYoutubeEmbed()} allow="autoplay" />
                             )}
                         </div>
-                    )}
 
-                    {showBandInfo && bandInfo && (
-                        <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setShowBandInfo(false)}>
-                            <div className="bg-gray-900 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                                <h2 className="text-2xl font-bold mb-4">ℹ️ Sobre {bandInfo.artist}</h2>
-                                {bandInfo.loading ? <p>Carregando...</p> : <p className="whitespace-pre-wrap">{bandInfo.content}</p>}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="fixed bottom-4 left-4 right-4 z-40">
-                        {currentTrack && !showFullScreenPlayer && (
-                            <div onClick={() => setShowFullScreenPlayer(true)} className="mb-2 glass-nav rounded-lg p-2 flex items-center justify-between cursor-pointer">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
-                                        <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} style={{ width: '45%', height: '45%' }} />
-                                        <div className="vinyl-hole" style={{ width: '15%', height: '15%' }}></div>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold truncate">{currentTrack.title}</p>
-                                        <p className="text-xs text-green-400 truncate">{currentTrack.artist}</p>
+                        {showFullScreenPlayer && currentTrack && (
+                            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex flex-col">
+                                <div className="p-6 flex justify-between relative z-10">
+                                    <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
+                                    <button onClick={() => fetchBandInfo(currentTrack.artist)} className="bg-white/10 px-4 py-2 rounded-lg">ℹ️ Sobre</button>
+                                </div>
+                                <div className="flex-1 flex items-center justify-center relative z-10">
+                                    <div className={`w-96 h-96 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
+                                        <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} />
+                                        <div className="vinyl-hole"></div>
                                     </div>
                                 </div>
-                                <button onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}>
-                                    {isPlaying ? <Icons.Pause width={20} /> : <Icons.Play width={20} />}
-                                </button>
+                                <div className="p-8 space-y-4 relative z-10">
+                                    <div>
+                                        <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
+                                        <p className={`text-lg ${themeColors[activeTheme]}`}>{currentTrack.artist}</p>
+                                    </div>
+
+                                    {/* Progress Bar */}
+                                    <div className="space-y-2">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max={duration || 100}
+                                            value={currentTime}
+                                            onChange={handleSeek}
+                                            className="w-full"
+                                            style={{
+                                                background: `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.2) ${(currentTime / duration) * 100}%)`
+                                            }}
+                                        />
+                                        <div className="flex justify-between text-xs text-gray-400">
+                                            <span>{formatTime(currentTime)}</span>
+                                            <span>{formatTime(duration)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Controls */}
+                                    <div className="flex justify-center gap-6 items-center">
+                                        <button onClick={playPrevious} className="text-white/70 hover:text-white">
+                                            <Icons.SkipBack width={32} />
+                                        </button>
+                                        <button onClick={() => setIsPlaying(!isPlaying)} className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center">
+                                            {isPlaying ? <Icons.Pause width={28} /> : <Icons.Play width={28} />}
+                                        </button>
+                                        <button onClick={playNext} className="text-white/70 hover:text-white">
+                                            <Icons.Skip width={32} />
+                                        </button>
+                                    </div>
+
+                                    {/* Volume */}
+                                    <div className="flex items-center gap-3">
+                                        <Icons.Volume width={20} />
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            value={volume}
+                                            onChange={handleVolumeChange}
+                                            className="flex-1"
+                                            style={{
+                                                background: `linear-gradient(to right, white ${volume}%, rgba(255,255,255,0.2) ${volume}%)`
+                                            }}
+                                        />
+                                        <span className="text-xs w-8">{volume}%</span>
+                                    </div>
+                                </div>
+                                {currentTrack.youtubeId && (
+                                    <iframe ref={youtubeRef} className="hidden" src={getYoutubeEmbed()} allow="autoplay" />
+                                )}
                             </div>
                         )}
 
-                        <div className="glass-nav rounded-2xl h-16 flex items-center justify-around px-2">
-                            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 w-16 ${view === 'home' ? 'text-white' : 'text-gray-500'}`}>
-                                <Icons.Home width={24} />
-                                <span className="text-[10px]">Início</span>
-                            </button>
-                            <button onClick={() => setView('search')} className={`flex flex-col items-center gap-1 w-16 ${view === 'search' ? 'text-white' : 'text-gray-500'}`}>
-                                <Icons.Search width={24} />
-                                <span className="text-[10px]">Buscar</span>
-                            </button>
-                            <button onClick={() => setView('chords')} className={`flex flex-col items-center gap-1 w-16 ${view === 'chords' ? 'text-white' : 'text-gray-500'}`}>
-                                <Icons.Guitar width={24} />
-                                <span className="text-[10px]">Cifra</span>
-                            </button>
-                            <button onClick={() => setView('lyrics')} className={`flex flex-col items-center gap-1 w-16 ${view === 'lyrics' ? 'text-white' : 'text-gray-500'}`}>
-                                <Icons.ABC width={24} />
-                                <span className="text-[10px]">Letra</span>
-                            </button>
+                        {showBandInfo && bandInfo && (
+                            <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4" onClick={() => setShowBandInfo(false)}>
+                                <div className="bg-gray-900 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                    <h2 className="text-2xl font-bold mb-4">ℹ️ Sobre {bandInfo.artist}</h2>
+                                    {bandInfo.loading ? <p>Carregando...</p> : <p className="whitespace-pre-wrap">{bandInfo.content}</p>}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="fixed bottom-4 left-4 right-4 z-40">
+                            {currentTrack && !showFullScreenPlayer && (
+                                <div onClick={() => setShowFullScreenPlayer(true)} className="mb-2 glass-nav rounded-lg p-2 flex items-center justify-between cursor-pointer">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
+                                            <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} style={{ width: '45%', height: '45%' }} />
+                                            <div className="vinyl-hole" style={{ width: '15%', height: '15%' }}></div>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold truncate">{currentTrack.title}</p>
+                                            <p className="text-xs text-green-400 truncate">{currentTrack.artist}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={(e) => { e.stopPropagation(); setIsPlaying(!isPlaying); }}>
+                                        {isPlaying ? <Icons.Pause width={20} /> : <Icons.Play width={20} />}
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="glass-nav rounded-2xl h-16 flex items-center justify-around px-2">
+                                <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 w-16 ${view === 'home' ? 'text-white' : 'text-gray-500'}`}>
+                                    <Icons.Home width={24} />
+                                    <span className="text-[10px]">Início</span>
+                                </button>
+                                <button onClick={() => setView('search')} className={`flex flex-col items-center gap-1 w-16 ${view === 'search' ? 'text-white' : 'text-gray-500'}`}>
+                                    <Icons.Search width={24} />
+                                    <span className="text-[10px]">Buscar</span>
+                                </button>
+                                <button onClick={() => setView('chords')} className={`flex flex-col items-center gap-1 w-16 ${view === 'chords' ? 'text-white' : 'text-gray-500'}`}>
+                                    <Icons.Guitar width={24} />
+                                    <span className="text-[10px]">Cifra</span>
+                                </button>
+                                <button onClick={() => setView('lyrics')} className={`flex flex-col items-center gap-1 w-16 ${view === 'lyrics' ? 'text-white' : 'text-gray-500'}`}>
+                                    <Icons.ABC width={24} />
+                                    <span className="text-[10px]">Letra</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
