@@ -611,71 +611,70 @@
             const selectTrackFromSearch = async (track) => {
                 setLoadingTracks(true);
                 try {
-                    console.log('Searching YouTube for:', track);
+                    console.log('🎵 Selecionando música:', track);
 
-                    // Check if already in cache (Firebase)
-                    let cachedTrack = null;
-                    if (db) {
-                        const snapshot = await db.collection('song_cache')
-                            .where('title', '==', track.title)
-                            .where('artist', '==', track.artist)
-                            .get();
-                        if (!snapshot.empty) {
-                            cachedTrack = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-                            console.log('Found in cache:', cachedTrack);
-                        }
+                    // Fecha modal e mostra loading
+                    setView('home');
+
+                    // Busca YouTube ID via API
+                    const searchQuery = `${track.artist} ${track.title} official audio`;
+                    console.log('🔍 Buscando no YouTube:', searchQuery);
+
+                    const res = await fetch(
+                        `https://www.googleapis.com/youtube/v3/search?part=id&q=${encodeURIComponent(searchQuery)}&key=${YOUTUBE_API_KEY}&type=video&videoEmbeddable=true&videoCategoryId=10&maxResults=1`
+                    );
+
+                    if (!res.ok) {
+                        throw new Error(`YouTube API retornou erro ${res.status}`);
                     }
 
-                    if (cachedTrack && cachedTrack.youtubeId) {
-                        // Use cached track
-                        console.log('Using cached YouTube ID:', cachedTrack.youtubeId);
-                        setCurrentTrack(cachedTrack);
+                    const data = await res.json();
+                    console.log('📺 Resposta YouTube API:', data);
+
+                    if (data.items && data.items.length > 0) {
+                        const youtubeId = data.items[0].id.videoId;
+                        console.log('✅ YouTube ID encontrado:', youtubeId);
+
+                        // Cria objeto completo de música
+                        const newSong = {
+                            id: `${track.collectionId}-${Date.now()}`,
+                            title: track.title,
+                            artist: track.artist,
+                            youtubeId: youtubeId,
+                            artwork: track.artwork,
+                            albumName: track.albumName || 'Desconhecido',
+                            liked: false,
+                            addedAt: new Date().toISOString()
+                        };
+
+                        // Salva no Firebase
+                        if (db) {
+                            try {
+                                const docRef = await db.collection('song_cache').add(newSong);
+                                newSong.id = docRef.id;
+                                console.log('💾 Salvo no Firebase com ID:', docRef.id);
+                            } catch (e) {
+                                console.error('❌ Erro ao salvar no Firebase:', e);
+                            }
+                        }
+
+                        // Atualiza estados
+                        setCurrentTrack(newSong);
                         setCurrentIndex(0);
                         setIsPlaying(true);
                         setShowFullScreenPlayer(false);
-                        setView('home');
+
+                        // Recarrega biblioteca
+                        loadMusicLibrary();
+
+                        console.log('🎸 Tocando agora:', newSong.title);
                     } else {
-                        // Fetch YouTube ID
-                        const query = `${track.artist} ${track.title} official audio`;
-                        console.log('YouTube search query:', query);
-
-                        const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&key=${YOUTUBE_API_KEY}&maxResults=1`);
-                        const ytData = await ytRes.json();
-
-                        console.log('YouTube API response:', ytData);
-
-                        if (ytData.items && ytData.items.length > 0) {
-                            const youtubeId = ytData.items[0].id.videoId;
-                            console.log('Found YouTube ID:', youtubeId);
-
-                            const newTrack = {
-                                ...track,
-                                youtubeId,
-                                liked: false,
-                                addedAt: new Date().toISOString()
-                            };
-
-                            // Save to Firebase
-                            if (db) {
-                                const docRef = await db.collection('song_cache').add(newTrack);
-                                newTrack.id = docRef.id;
-                                console.log('Saved to Firebase with ID:', docRef.id);
-                            }
-
-                            setCurrentTrack(newTrack);
-                            setCurrentIndex(0);
-                            setIsPlaying(true);
-                            setShowFullScreenPlayer(false);
-                            setView('home');
-                            loadMusicLibrary();
-                        } else {
-                            console.error('No YouTube results found');
-                            alert('Música não encontrada no YouTube. Tente outra.');
-                        }
+                        console.error('❌ Nenhum vídeo encontrado no YouTube');
+                        alert('Música não encontrada no YouTube. Tente outra.');
                     }
                 } catch (e) {
-                    console.error('Error selecting track:', e);
-                    alert(`Erro ao carregar música: ${e.message}`);
+                    console.error('❌ Erro ao buscar/salvar:', e);
+                    alert(`Erro: ${e.message}`);
                 } finally {
                     setLoadingTracks(false);
                 }
