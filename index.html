@@ -15,8 +15,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Metal+Mania&family=Inter:wght@400;600;800&display=swap"
-        rel="stylesheet">
 
     <style>
         * {
@@ -58,7 +56,9 @@
         }
 
         .rock-font {
-            font-family: 'Metal Mania', cursive;
+            font-family: Impact, 'Arial Black', 'Helvetica', sans-serif;
+            font-weight: 900;
+            letter-spacing: 2px;
         }
 
         .glass-nav {
@@ -516,16 +516,35 @@
                 setCurrentTime(0);
                 setDuration(0);
 
-                // Força o iframe a recarregar (importante para mobile)
-                setTimeout(() => {
+                // Para WebView/Kodular: força play com múltiplas tentativas
+                const forcePlay = () => {
                     if (youtubeRef.current && youtubeRef.current.contentWindow) {
-                        youtubeRef.current.contentWindow.postMessage(
-                            JSON.stringify({ event: 'command', func: 'playVideo' }),
-                            '*'
-                        );
-                        console.log('🎬 Comando playVideo enviado ao iframe');
+                        try {
+                            // Tenta múltiplos comandos
+                            youtubeRef.current.contentWindow.postMessage(
+                                JSON.stringify({ event: 'command', func: 'playVideo' }),
+                                '*'
+                            );
+                            youtubeRef.current.contentWindow.postMessage(
+                                JSON.stringify({ event: 'command', func: 'unMute' }),
+                                '*'
+                            );
+                            youtubeRef.current.contentWindow.postMessage(
+                                JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }),
+                                '*'
+                            );
+                            console.log('🎬 Comandos enviados: playVideo, unMute, setVolume');
+                        } catch (e) {
+                            console.error('Erro ao enviar comandos:', e);
+                        }
                     }
-                }, 500);
+                };
+
+                // Tenta imediatamente e depois com delays
+                setTimeout(forcePlay, 100);
+                setTimeout(forcePlay, 500);
+                setTimeout(forcePlay, 1000);
+                setTimeout(forcePlay, 2000);
             };
 
             const playNext = () => {
@@ -932,19 +951,21 @@
 
             const getYoutubeEmbed = () => {
                 if (!currentTrack?.youtubeId) return '';
-                // Parâmetros otimizados para mobile e desktop
+                // Parâmetros otimizados para WebView/Kodular
                 const params = new URLSearchParams({
-                    autoplay: isPlaying ? '1' : '0',
-                    mute: '0',                      // Permite áudio (importante!)
-                    playsinline: '1',               // Permite playback inline no iOS
-                    rel: '0',                       // Não mostra vídeos relacionados
-                    modestbranding: '1',            // Remove logo do YouTube
-                    controls: '0',                  // Remove controles nativos
-                    enablejsapi: '1',               // Habilita JS API
+                    autoplay: '1',                  // Sempre tentar autoplay
+                    playsinline: '1',               // iOS/Android inline
+                    rel: '0',
+                    modestbranding: '1',
+                    controls: '1',                  // Mostra controles (importante para WebView!)
+                    enablejsapi: '1',
+                    fs: '1',                        // Permite fullscreen
                     origin: window.location.origin,
                     widgetid: '1'
                 });
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params.toString()}`;
+                const url = `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params.toString()}`;
+                console.log('🔗 YouTube URL:', url);
+                return url;
             };
 
             const handleSeek = (e) => {
@@ -1358,11 +1379,22 @@
                                 </div>
                                 {currentTrack.youtubeId && (
                                     <iframe
+                                        key={currentTrack.youtubeId}
                                         ref={youtubeRef}
-                                        className="hidden"
+                                        style={{
+                                            position: 'fixed',
+                                            bottom: '80px',
+                                            right: '10px',
+                                            width: '1px',
+                                            height: '1px',
+                                            opacity: '0.01',
+                                            pointerEvents: 'none',
+                                            zIndex: 999
+                                        }}
                                         src={getYoutubeEmbed()}
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                         allowFullScreen
+                                        title="YouTube Player"
                                     />
                                 )}
                             </div>
