@@ -7,6 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>IronMusic - Rock Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -431,6 +432,7 @@
                 setDebugLogs(prev => [...prev.slice(-20), { msg: logEntry, type }]); // Mantém últimas 20 entradas
             };
             const progressInterval = useRef(null);
+            const forcePlayInterval = useRef(null); // Ref para o intervalo de forcePlay
 
             useEffect(() => {
                 loadMusicLibrary();
@@ -469,12 +471,22 @@
                         if (data.event === 'infoDelivery') {
                             if (data.info && data.info.currentTime !== undefined) {
                                 setCurrentTime(data.info.currentTime);
+                                // Se o currentTime > 0, o vídeo começou, podemos parar de forçar
+                                if (data.info.currentTime > 0.5 && forcePlayInterval.current) {
+                                    clearInterval(forcePlayInterval.current);
+                                    forcePlayInterval.current = null;
+                                }
                             }
                             if (data.info && data.info.duration !== undefined) {
                                 setDuration(data.info.duration);
                             }
                             if (data.info && data.info.playerState !== undefined) {
                                 // 0 = ended, 1 = playing, 2 = paused
+                                if (data.info.playerState === 1) {
+                                    setIsPlaying(true);
+                                    // Limpa intervalo de força bruta se estiver tocando
+                                    if(forcePlayInterval.current) clearInterval(forcePlayInterval.current);
+                                }
                                 if (data.info.playerState === 0) {
                                     // Video ended, play next
                                     playNext();
@@ -490,6 +502,7 @@
                 return () => {
                     document.removeEventListener('click', handleClick);
                     window.removeEventListener('message', handleMessage);
+                    if(forcePlayInterval.current) clearInterval(forcePlayInterval.current);
                 };
             }, []);
 
@@ -516,7 +529,10 @@
                 setCurrentTime(0);
                 setDuration(0);
 
-                // Para WebView/Kodular: força play com múltiplas tentativas
+                // Limpa intervalo anterior se existir
+                if (forcePlayInterval.current) clearInterval(forcePlayInterval.current);
+
+                // Para WebView/Kodular: força play com múltiplas tentativas agressivas
                 const forcePlay = () => {
                     if (youtubeRef.current && youtubeRef.current.contentWindow) {
                         try {
@@ -529,22 +545,30 @@
                                 JSON.stringify({ event: 'command', func: 'unMute' }),
                                 '*'
                             );
+                             // Definir volume 100 pode ser bloqueado em mobile, mas tentamos
                             youtubeRef.current.contentWindow.postMessage(
                                 JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }),
                                 '*'
                             );
-                            console.log('🎬 Comandos enviados: playVideo, unMute, setVolume');
+                            console.log('🎬 Comando enviado no mobile');
                         } catch (e) {
                             console.error('Erro ao enviar comandos:', e);
                         }
                     }
                 };
 
-                // Tenta imediatamente e depois com delays
-                setTimeout(forcePlay, 100);
-                setTimeout(forcePlay, 500);
-                setTimeout(forcePlay, 1000);
-                setTimeout(forcePlay, 2000);
+                // Tenta imediatamente
+                forcePlay();
+                
+                // Repete a cada 1 segundo por 10 segundos ou até começar (gerenciado pelo useEffect de mensagens)
+                let attempts = 0;
+                forcePlayInterval.current = setInterval(() => {
+                    attempts++;
+                    if(attempts > 15) { // Para após 15 segundos tentando
+                        clearInterval(forcePlayInterval.current);
+                    }
+                    forcePlay();
+                }, 1000);
             };
 
             const playNext = () => {
@@ -952,15 +976,18 @@
             const getYoutubeEmbed = () => {
                 if (!currentTrack?.youtubeId) return '';
                 // Parâmetros otimizados para WebView/Kodular
+                // O parametro ORIGIN é crucial no mobile para evitar bloqueio 403
+                const origin = window.location.origin === 'null' || !window.location.origin ? 'https://localhost' : window.location.origin;
+                
                 const params = new URLSearchParams({
                     autoplay: '1',                  // Sempre tentar autoplay
-                    playsinline: '1',               // iOS/Android inline
+                    playsinline: '1',               // iOS/Android inline OBRIGATÓRIO no mobile
                     rel: '0',
                     modestbranding: '1',
                     controls: '1',                  // Mostra controles (importante para WebView!)
                     enablejsapi: '1',
                     fs: '1',                        // Permite fullscreen
-                    origin: window.location.origin,
+                    origin: origin,
                     widgetid: '1'
                 });
                 const url = `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params.toString()}`;
@@ -1211,82 +1238,6 @@
                                 </div>
                             )}
 
-                            {view === 'chords' && currentTrack && (
-                                <div className="space-y-4">
-                                    <h2 className="text-2xl font-bold mb-4">🎸 Cifras & Tablaturas</h2>
-                                    <div className="bg-white/5 p-4 rounded-lg">
-                                        <p className="text-sm text-gray-400 mb-4">
-                                            Clique em um dos sites abaixo para ver cifras/tablaturas:
-                                        </p>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <a
-                                                href={`https://www.cifraclub.com.br/${currentTrack.artist.toLowerCase().replace(/\s+/g, '-')}/${currentTrack.title.toLowerCase().replace(/\s+/g, '-')}/`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 bg-yellow-600 hover:bg-yellow-500 p-4 rounded-lg transition group"
-                                            >
-                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-                                                    <i className="fas fa-guitar text-yellow-600 text-xl"></i>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-bold text-white">Cifra Club</p>
-                                                    <p className="text-xs text-yellow-100">Maior site brasileiro</p>
-                                                </div>
-                                                <i className="fas fa-external-link-alt text-white/70 group-hover:text-white"></i>
-                                            </a>
-
-                                            <a
-                                                href={`https://www.ultimate-guitar.com/search.php?search_type=title&value=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 bg-orange-600 hover:bg-orange-500 p-4 rounded-lg transition group"
-                                            >
-                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-                                                    <i className="fas fa-guitar text-orange-600 text-xl"></i>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-bold text-white">Ultimate Guitar</p>
-                                                    <p className="text-xs text-orange-100">Maior comunidade mundial</p>
-                                                </div>
-                                                <i className="fas fa-external-link-alt text-white/70 group-hover:text-white"></i>
-                                            </a>
-
-                                            <a
-                                                href={`https://tabs.ultimate-guitar.com/tab/${currentTrack.artist.toLowerCase().replace(/\s+/g, '-')}/${currentTrack.title.toLowerCase().replace(/\s+/g, '-')}-tabs-1`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 bg-red-600 hover:bg-red-500 p-4 rounded-lg transition group"
-                                            >
-                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-                                                    <i className="fas fa-music text-red-600 text-xl"></i>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-bold text-white">UG Tabs</p>
-                                                    <p className="text-xs text-red-100">Tablaturas completas</p>
-                                                </div>
-                                                <i className="fas fa-external-link-alt text-white/70 group-hover:text-white"></i>
-                                            </a>
-
-                                            <a
-                                                href={`https://www.songsterr.com/a/wa/search?pattern=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-3 bg-purple-600 hover:bg-purple-500 p-4 rounded-lg transition group"
-                                            >
-                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-                                                    <i className="fas fa-play text-purple-600 text-xl"></i>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="font-bold text-white">Songsterr</p>
-                                                    <p className="text-xs text-purple-100">Tabs interativas</p>
-                                                </div>
-                                                <i className="fas fa-external-link-alt text-white/70 group-hover:text-white"></i>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
                             {view === 'lyrics' && currentTrack && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
@@ -1392,8 +1343,9 @@
                                             zIndex: 999
                                         }}
                                         src={getYoutubeEmbed()}
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                        allow="accelerometer; autoplay *; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen *"
                                         allowFullScreen
+                                        playsInline
                                         title="YouTube Player"
                                     />
                                 )}
