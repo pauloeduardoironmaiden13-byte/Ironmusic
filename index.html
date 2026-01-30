@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=0.8, maximum-scale=1.0, user-scalable=yes">
     <title>IronMusic - Rock Player</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -140,24 +140,24 @@
             border-radius: 2px;
         }
 
-        /* Vinyl Disc Effect */
+        /* Vinyl Disc Effect - Realistic with center label */
         .vinyl-disc {
             border-radius: 50%;
             position: relative;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
         }
 
         .vinyl-disc::before {
             content: '';
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 30%;
-            height: 30%;
-            background: radial-gradient(circle, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 70%);
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1a1a1a;
             border-radius: 50%;
             z-index: 1;
+            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 0, 0, 0.5);
         }
 
         .vinyl-disc::after {
@@ -168,12 +168,27 @@
             right: 0;
             bottom: 0;
             background: repeating-conic-gradient(from 0deg,
-                    rgba(255, 255, 255, 0.03) 0deg,
-                    rgba(255, 255, 255, 0.03) 2deg,
-                    transparent 2deg,
-                    transparent 4deg);
+                    rgba(255, 255, 255, 0.02) 0deg,
+                    rgba(255, 255, 255, 0.02) 1deg,
+                    transparent 1deg,
+                    transparent 2deg);
             border-radius: 50%;
             pointer-events: none;
+            z-index: 2;
+        }
+
+        .vinyl-disc img,
+        .vinyl-disc .vinyl-label {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 45% !important;
+            height: 45% !important;
+            border-radius: 50% !important;
+            z-index: 3 !important;
+            object-fit: cover !important;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5) !important;
         }
 
         /* Context Menu */
@@ -226,7 +241,7 @@
         };
 
         const GEMINI_API_KEY = "AIzaSyDKszV0GsFp9hlTexYgyQKnrVfeNg9bO7A";
-        const YOUTUBE_API_KEY = "AIzaSyBkKxlcuOU5Q6MU7ma9lAW9WHTr2Fth4JQ";
+        const YOUTUBE_API_KEY = "AIzaSyBkKxlcuOU5Q6MU7ma9lAW2WHTr2Fth4JQ";
 
         let db = null;
         try {
@@ -277,14 +292,71 @@
             const [contextMenu, setContextMenu] = useState(null);
 
             const youtubeRef = useRef(null);
+            const progressInterval = useRef(null);
 
             useEffect(() => {
                 loadMusicLibrary();
 
+                // Update progress bar from YouTube
+                if (isPlaying && youtubeRef.current) {
+                    progressInterval.current = setInterval(() => {
+                        if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                            youtubeRef.current.contentWindow.postMessage(
+                                JSON.stringify({ event: 'command', func: 'getCurrentTime' }),
+                                '*'
+                            );
+                            youtubeRef.current.contentWindow.postMessage(
+                                JSON.stringify({ event: 'command', func: 'getDuration' }),
+                                '*'
+                            );
+                        }
+                    }, 1000);
+                } else {
+                    if (progressInterval.current) {
+                        clearInterval(progressInterval.current);
+                    }
+                }
+
+                return () => {
+                    if (progressInterval.current) {
+                        clearInterval(progressInterval.current);
+                    }
+                };
+            }, [isPlaying]);
+
+            useEffect(() => {
+                loadMusicLibrary();
+
+                // Listen for YouTube messages
+                const handleMessage = (event) => {
+                    if (event.origin !== 'https://www.youtube.com') return;
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.event === 'infoDelivery') {
+                            if (data.info && data.info.currentTime !== undefined) {
+                                setCurrentTime(data.info.currentTime);
+                            }
+                            if (data.info && data.info.duration !== undefined) {
+                                setDuration(data.info.duration);
+                            }
+                            if (data.info && data.info.playerState !== undefined) {
+                                // 0 = ended, 1 = playing, 2 = paused
+                                if (data.info.playerState === 0) {
+                                    // Video ended, play next
+                                    playNext();
+                                }
+                            }
+                        }
+                    } catch (e) { }
+                };
+                window.addEventListener('message', handleMessage);
                 // Close context menu on click outside
                 const handleClick = () => setContextMenu(null);
                 document.addEventListener('click', handleClick);
-                return () => document.removeEventListener('click', handleClick);
+                return () => {
+                    document.removeEventListener('click', handleClick);
+                    window.removeEventListener('message', handleMessage);
+                };
             }, []);
 
             const loadMusicLibrary = async () => {
@@ -436,10 +508,10 @@
             };
 
             const fetchBandInfo = async (artist) => {
+                setBandInfo({ artist, content: '', loading: true });
+                setShowBandInfo(true);
                 try {
-                    setShowBandInfo(true);
-                    setBandInfo({ loading: true });
-                    const prompt = `Informações sobre a banda ${artist}: História, membros atuais e passados, anos de formação, principais álbuns com anos de lançamento, curiosidades. Máximo 300 palavras em português.`;
+                    const prompt = `Forneça informações detalhadas sobre a banda "${artist}" em português, incluindo: história, membros (atuais e passados), principais álbuns com anos de lançamento, e curiosidades interessantes.`;
                     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -476,8 +548,40 @@
 
             const getYoutubeEmbed = () => {
                 if (!currentTrack?.youtubeId) return '';
-                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1`;
+                return `https://www.youtube.com/embed/${currentTrack.youtubeId}?autoplay=${isPlaying ? 1 : 0}&playsinline=1&rel=0&enablejsapi=1&origin=${window.location.origin}`;
             };
+
+            const handleSeek = (e) => {
+                const newTime = Number(e.target.value);
+                setCurrentTime(newTime);
+                if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                    youtubeRef.current.contentWindow.postMessage(
+                        JSON.stringify({ event: 'command', func: 'seekTo', args: [newTime, true] }),
+                        '*'
+                    );
+                }
+            };
+
+            const handleVolumeChange = (e) => {
+                const newVolume = Number(e.target.value);
+                setVolume(newVolume);
+                if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                    youtubeRef.current.contentWindow.postMessage(
+                        JSON.stringify({ event: 'command', func: 'setVolume', args: [newVolume] }),
+                        '*'
+                    );
+                }
+            };
+
+            useEffect(() => {
+                if (youtubeRef.current && youtubeRef.current.contentWindow) {
+                    const cmd = isPlaying ? 'playVideo' : 'pauseVideo';
+                    youtubeRef.current.contentWindow.postMessage(
+                        JSON.stringify({ event: 'command', func: cmd }),
+                        '*'
+                    );
+                }
+            }, [isPlaying]);
 
             const formatTime = (seconds) => {
                 const mins = Math.floor(seconds / 60);
@@ -539,7 +643,9 @@
                                                 onContextMenu={(e) => handleContextMenu(e, song)}
                                                 className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
                                             >
-                                                <img src={song.artwork} className="w-full aspect-square vinyl-disc mb-2 object-cover" alt={song.title} />
+                                                <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
+                                                    <img src={song.artwork} className="vinyl-label" alt={song.title} />
+                                                </div>
                                                 <h4 className="font-bold text-sm truncate">{song.title}</h4>
                                                 <p className="text-xs text-gray-400 truncate">{song.artist}</p>
                                             </div>
@@ -560,7 +666,9 @@
                                                             onContextMenu={(e) => handleContextMenu(e, song)}
                                                             className="music-card bg-white/5 p-3 rounded-lg cursor-pointer"
                                                         >
-                                                            <img src={song.artwork} className="w-full aspect-square vinyl-disc mb-2 object-cover" alt={song.title} />
+                                                            <div className="w-full aspect-square vinyl-disc mb-2 relative" style={{ position: 'relative' }}>
+                                                                <img src={song.artwork} className="vinyl-label" alt={song.title} />
+                                                            </div>
                                                             <h4 className="font-bold text-sm truncate">{song.title}</h4>
                                                         </div>
                                                     ))}
@@ -690,15 +798,17 @@
                     </div>
 
                     {showFullScreenPlayer && currentTrack && (
-                        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col">
-                            <div className="p-6 flex justify-between">
+                        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex flex-col">
+                            <div className="p-6 flex justify-between relative z-10">
                                 <button onClick={() => setShowFullScreenPlayer(false)}><Icons.ChevronDown width={32} /></button>
                                 <button onClick={() => fetchBandInfo(currentTrack.artist)} className="bg-white/10 px-4 py-2 rounded-lg">ℹ️ Sobre</button>
                             </div>
-                            <div className="flex-1 flex items-center justify-center">
-                                <img src={currentTrack.artwork} className={`w-80 h-80 vinyl-disc shadow-2xl ${isPlaying ? 'spin-slow' : ''}`} alt={currentTrack.title} />
+                            <div className="flex-1 flex items-center justify-center relative z-10">
+                                <div className={`w-96 h-96 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
+                                    <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} />
+                                </div>
                             </div>
-                            <div className="p-8 space-y-4">
+                            <div className="p-8 space-y-4 relative z-10">
                                 <div>
                                     <h2 className="text-2xl font-bold">{currentTrack.title}</h2>
                                     <p className={`text-lg ${themeColors[activeTheme]}`}>{currentTrack.artist}</p>
@@ -711,7 +821,7 @@
                                         min="0"
                                         max={duration || 100}
                                         value={currentTime}
-                                        onChange={(e) => setCurrentTime(Number(e.target.value))}
+                                        onChange={handleSeek}
                                         className="w-full"
                                         style={{
                                             background: `linear-gradient(to right, white ${(currentTime / duration) * 100}%, rgba(255,255,255,0.2) ${(currentTime / duration) * 100}%)`
@@ -744,7 +854,7 @@
                                         min="0"
                                         max="100"
                                         value={volume}
-                                        onChange={(e) => setVolume(Number(e.target.value))}
+                                        onChange={handleVolumeChange}
                                         className="flex-1"
                                         style={{
                                             background: `linear-gradient(to right, white ${volume}%, rgba(255,255,255,0.2) ${volume}%)`
@@ -772,7 +882,9 @@
                         {currentTrack && !showFullScreenPlayer && (
                             <div onClick={() => setShowFullScreenPlayer(true)} className="mb-2 glass-nav rounded-lg p-2 flex items-center justify-between cursor-pointer">
                                 <div className="flex items-center gap-3">
-                                    <img src={currentTrack.artwork} className={`w-10 h-10 vinyl-disc ${isPlaying ? 'spin-slow' : ''}`} alt={currentTrack.title} />
+                                    <div className={`w-10 h-10 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
+                                        <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} style={{ width: '45%', height: '45%' }} />
+                                    </div>
                                     <div>
                                         <p className="text-sm font-bold truncate">{currentTrack.title}</p>
                                         <p className="text-xs text-green-400 truncate">{currentTrack.artist}</p>
