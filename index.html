@@ -389,7 +389,9 @@
             Guitar: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m11.9 12.1 4.514-4.514" /><path d="M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z" /><path d="m6 16 2 2" /><path d="M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z" /><circle cx="11.5" cy="12.5" r=".5" fill="currentColor" /></svg>,
             ABC: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7V5c0-1.1.9-2 2-2h2" /><path d="M17 3h2c1.1 0 2 .9 2 2v2" /><path d="M21 17v2c0 1.1-.9 2-2 2h-2" /><path d="M7 21H5c-1.1 0-2-.9-2-2v-2" /><path d="M7 8h8" /><path d="M7 12h10" /><path d="M7 16h6" /></svg>,
             ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>,
-            Volume: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
+            Volume: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>,
+            Shuffle: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 3h5v5" /><path d="M4 20L21 3" /><path d="M21 16v5h-5" /><path d="M15 15l6 6" /><path d="M4 4l5 5" /></svg>,
+            List: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
         };
 
         function App() {
@@ -419,6 +421,7 @@
             const [lyrics, setLyrics] = useState(null);
             const [loadingLyrics, setLoadingLyrics] = useState(false);
             const [contextMenu, setContextMenu] = useState(null);
+            const [shuffleMode, setShuffleMode] = useState(false);
 
             const youtubeRef = useRef(null);
             const playerRef = useRef(null);
@@ -525,11 +528,37 @@
                 setShowFullScreenPlayer(false);
                 setCurrentTime(0);
                 setDuration(0);
+
+                // Configura Media Session API para background playback
+                if ('mediaSession' in navigator) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: track.title,
+                        artist: track.artist,
+                        artwork: [
+                            { src: track.artwork, sizes: '512x512', type: 'image/jpeg' }
+                        ]
+                    });
+
+                    navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+                    navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+                    navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
+                    navigator.mediaSession.setActionHandler('nexttrack', playNext);
+
+                    console.log('🎧 Media Session configurada para:', track.title);
+                }
             };
 
             const playNext = () => {
                 if (musicLibrary.length === 0) return;
-                const nextIndex = (currentIndex + 1) % musicLibrary.length;
+                let nextIndex;
+                if (shuffleMode) {
+                    // Reprodução aleatória
+                    nextIndex = Math.floor(Math.random() * musicLibrary.length);
+                    console.log('🔀 Shuffle: próxima música aleatória');
+                } else {
+                    // Reprodução sequencial
+                    nextIndex = (currentIndex + 1) % musicLibrary.length;
+                }
                 handlePlay(musicLibrary[nextIndex], nextIndex);
             };
 
@@ -1317,10 +1346,30 @@
                                     <button onClick={() => fetchBandInfo(currentTrack.artist)} className="bg-white/10 px-4 py-2 rounded-lg">ℹ️ Sobre</button>
                                 </div>
                                 <div className="flex-1 flex items-center justify-center relative z-10">
-                                    <div className={`w-96 h-96 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
-                                        <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} />
-                                        <div className="vinyl-hole"></div>
-                                    </div>
+                                    {/* Player do YouTube VISÍVEL como video player */}
+                                    {currentTrack.youtubeId ? (
+                                        <iframe
+                                            key={currentTrack.youtubeId}
+                                            ref={youtubeRef}
+                                            style={{
+                                                width: '90%',
+                                                maxWidth: '640px',
+                                                aspectRatio: '16/9',
+                                                border: 'none',
+                                                borderRadius: '12px',
+                                                boxShadow: '0 0 40px rgba(0,0,0,0.5)'
+                                            }}
+                                            src={getYoutubeEmbed()}
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                            title="YouTube Player"
+                                        />
+                                    ) : (
+                                        <div className={`w-96 h-96 vinyl-disc relative ${isPlaying ? 'spin-slow' : ''}`} style={{ position: 'relative' }}>
+                                            <img src={currentTrack.artwork} className="vinyl-label" alt={currentTrack.title} />
+                                            <div className="vinyl-hole"></div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="p-8 space-y-4 relative z-10">
                                     <div>
@@ -1349,6 +1398,13 @@
 
                                     {/* Controls */}
                                     <div className="flex justify-center gap-6 items-center">
+                                        <button
+                                            onClick={() => setShuffleMode(!shuffleMode)}
+                                            className={`${shuffleMode ? 'text-green-400' : 'text-white/50'} hover:text-white transition`}
+                                            title={shuffleMode ? 'Shuffle ativado' : 'Shuffle desativado'}
+                                        >
+                                            <Icons.Shuffle width={24} />
+                                        </button>
                                         <button onClick={playPrevious} className="text-white/70 hover:text-white">
                                             <Icons.SkipBack width={32} />
                                         </button>
@@ -1358,6 +1414,15 @@
                                         <button onClick={playNext} className="text-white/70 hover:text-white">
                                             <Icons.Skip width={32} />
                                         </button>
+                                        <a
+                                            href={`https://www.youtube.com/watch?v=${currentTrack.youtubeId}&list=RD${currentTrack.youtubeId}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-red-500 hover:text-red-400 transition"
+                                            title="Abrir playlist do YouTube"
+                                        >
+                                            <Icons.List width={24} />
+                                        </a>
                                     </div>
 
                                     {/* Volume */}
@@ -1377,108 +1442,6 @@
                                         <span className="text-xs w-8">{volume}%</span>
                                     </div>
                                 </div>
-                                {currentTrack.youtubeId && (
-                                    <div style={{
-                                        position: 'fixed',
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: 'translate(-50%, -50%)',
-                                        zIndex: 99999,
-                                        background: 'rgba(0,0,0,0.95)',
-                                        borderRadius: '16px',
-                                        padding: '20px',
-                                        border: '3px solid #fbbf24',
-                                        boxShadow: '0 0 40px rgba(251,191,36,0.8)'
-                                    }}>
-                                        <div style={{
-                                            color: 'white',
-                                            fontSize: '14px',
-                                            fontWeight: 'bold',
-                                            marginBottom: '8px',
-                                            textAlign: 'center'
-                                        }}>
-                                            🎵 {currentTrack.title}
-                                        </div>
-                                        <div style={{
-                                            color: '#fbbf24',
-                                            fontSize: '12px',
-                                            fontWeight: 'bold',
-                                            marginBottom: '10px',
-                                            textAlign: 'center'
-                                        }}>
-                                            👇 CLIQUE NO VÍDEO PARA TOCAR
-                                        </div>
-                                        <iframe
-                                            key={currentTrack.youtubeId}
-                                            ref={youtubeRef}
-                                            style={{
-                                                width: '280px',
-                                                height: '200px',
-                                                border: 'none',
-                                                borderRadius: '12px',
-                                                display: 'block'
-                                            }}
-                                            src={getYoutubeEmbed()}
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                            allowFullScreen
-                                            title="YouTube Player"
-                                        />
-                                        <div style={{
-                                            display: 'flex',
-                                            gap: '10px',
-                                            marginTop: '12px'
-                                        }}>
-                                            <button
-                                                onClick={playPrevious}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '10px',
-                                                    background: '#3b82f6',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '8px',
-                                                    fontSize: '12px',
-                                                    fontWeight: 'bold',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                ⏮️ ANTERIOR
-                                            </button>
-                                            <button
-                                                onClick={playNext}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '10px',
-                                                    background: '#10b981',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '8px',
-                                                    fontSize: '12px',
-                                                    fontWeight: 'bold',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                PRÓXIMA ⏭️
-                                            </button>
-                                            <button
-                                                onClick={() => setCurrentTrack(null)}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '10px',
-                                                    background: '#ef4444',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '8px',
-                                                    fontSize: '12px',
-                                                    fontWeight: 'bold',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                ✖️ FECHAR
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         )}
 
@@ -1582,6 +1545,55 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+    </script>
+
+    <!-- Service Worker para Background Playback -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('✅ Service Worker registrado:', registration.scope);
+
+                        // Mantém o service worker ativo
+                        setInterval(() => {
+                            if (registration.active) {
+                                registration.active.postMessage({ type: 'KEEP_ALIVE' });
+                            }
+                        }, 30000); // A cada 30 segundos
+                    })
+                    .catch(error => {
+                        console.log('❌ Erro ao registrar Service Worker:', error);
+                    });
+            });
+        }
+
+        // Previne suspensão quando minimizado
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('🔋 Wake Lock ativado');
+
+                    wakeLock.addEventListener('release', () => {
+                        console.log('🔋 Wake Lock liberado');
+                    });
+                }
+            } catch (err) {
+                console.log('Wake Lock não suportado:', err);
+            }
+        }
+
+        // Ativa wake lock ao tocar música
+        document.addEventListener('play', requestWakeLock, true);
+
+        // Reativa wake lock quando a página volta a ser visível
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
     </script>
 </body>
 
