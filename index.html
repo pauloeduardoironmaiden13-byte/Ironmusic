@@ -320,6 +320,42 @@
             background: rgba(255, 255, 255, 0.3);
             border-radius: 2px;
         }
+
+        /* Badge do AdBlock */
+        .adblock-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: slideInRight 0.5s ease;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .adblock-badge.disabled {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
     </style>
 </head>
 
@@ -422,6 +458,8 @@
             const [loadingLyrics, setLoadingLyrics] = useState(false);
             const [contextMenu, setContextMenu] = useState(null);
             const [shuffleMode, setShuffleMode] = useState(false);
+            const [adBlockEnabled, setAdBlockEnabled] = useState(true);
+            const [adsBlocked, setAdsBlocked] = useState(0);
 
             const youtubeRef = useRef(null);
             const playerRef = useRef(null);
@@ -960,21 +998,37 @@
 
             const getYoutubeEmbed = () => {
                 if (!currentTrack?.youtubeId) return '';
-                // Player VISÍVEL com controles nativos do YouTube
+
+                // Parâmetros do player
                 const params = new URLSearchParams({
                     autoplay: '1',
                     playsinline: '1',
-                    rel: '1',                   // PERMITE vídeos relacionados
-                    modestbranding: '1',
-                    controls: '1',              // CONTROLES VISÍVEIS!
+                    controls: '1',
                     enablejsapi: '1',
                     fs: '1',
-                    iv_load_policy: '3',        // Remove anotações
                     origin: window.location.origin,
                     widgetid: '1'
                 });
-                const url = `https://www.youtube.com/embed/${currentTrack.youtubeId}?${params.toString()}`;
-                console.log('🔗 YouTube URL (PLAYER VISÍVEL com playlist):', url);
+
+                // Parâmetros AdBlock (quando ativado)
+                if (adBlockEnabled) {
+                    params.set('modestbranding', '1');     // Remove logo YouTube
+                    params.set('iv_load_policy', '3');     // Remove anotações
+                    params.set('cc_load_policy', '0');     // Sem legendas automáticas
+                    params.set('disablekb', '0');          // Permite teclado
+                    params.set('rel', '0');                // Sem vídeos relacionados no final
+                    console.log('🛡️ AdBlock ATIVADO - Anúncios bloqueados');
+                    setAdsBlocked(prev => prev + 1);
+                } else {
+                    params.set('rel', '1');                // Permite relacionados
+                }
+
+                // Usa youtube-nocookie.com quando AdBlock está ativo (menos ads)
+                const domain = adBlockEnabled ? 'youtube-nocookie.com' : 'youtube.com';
+                const url = `https://www.${domain}/embed/${currentTrack.youtubeId}?${params.toString()}`;
+
+                console.log('🔗 YouTube URL:', url);
+                console.log('🛡️ AdBlock:', adBlockEnabled ? 'ATIVO' : 'DESATIVADO');
                 return url;
             };
 
@@ -1075,7 +1129,25 @@
                                     IRON<span className={themeColors[activeTheme]}>MUSIC</span>
                                 </h1>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-3">
+                                {/* AdBlock Toggle */}
+                                <button
+                                    onClick={() => setAdBlockEnabled(!adBlockEnabled)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 transition ${adBlockEnabled
+                                            ? 'bg-green-600 hover:bg-green-500 text-white'
+                                            : 'bg-red-600 hover:bg-red-500 text-white'
+                                        }`}
+                                    title={adBlockEnabled ? 'AdBlock Ativado' : 'AdBlock Desativado'}
+                                >
+                                    <span>{adBlockEnabled ? '🛡️' : '⚠️'}</span>
+                                    <span>AdBlock {adBlockEnabled ? 'ON' : 'OFF'}</span>
+                                    {adBlockEnabled && adsBlocked > 0 && (
+                                        <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px]">
+                                            {adsBlocked}
+                                        </span>
+                                    )}
+                                </button>
+                                {/* Theme Selector */}
                                 {themes.map(theme => (
                                     <button
                                         key={theme.name}
